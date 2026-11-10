@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2] - 2026-11-10
+
+- A reply that is not JSON from CNCjs (for example a proxy's sign-in page) now
+  fails the load. Before, an HTML reply to the upload was reported as loaded.
+- Malformed entries in CNCjs's controller list no longer surface a script error.
+- Undoing an edit brings back the outcome of the program that was sent.
+
 ## [0.2.1] - 2026-11-10
 
 - A load outcome that arrives after an edit is still shown, marked as being
