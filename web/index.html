@@ -1080,7 +1080,15 @@ const embedding = window.parent === window || !token ? 'standalone' : sameOrigin
 const cnc = { token, port: null, load: { state: 'idle', message: '', program: '' } };
 const programName = () => `${st.op}${st.op === 'square' ? `-setup${st.sq.setup}` : st.op === 'side' ? `-${st.side.side}` : ''}.nc`;
 const programText = () => current.length ? current.join('\n') + '\n' : '';
-const setLoad = (state, message = '', program = '') => { cnc.load = { state, message, program }; updateLoad(); };
+const setLoad = (state, message = '', program = '') => {
+  // An outcome that arrives after the operator edited the program is still shown once,
+  // marked as describing the earlier version; the next edit clears it.
+  const edited = state !== 'loading' && program !== programText();
+  cnc.load = edited
+    ? { state, message: `${message} (This was the program before your last edit.)`, program: programText() }
+    : { state, message, program };
+  updateLoad();
+};
 
 function updateLoad() {
   const load = document.getElementById('load'), note = document.getElementById('cnc-note');
@@ -1114,7 +1122,9 @@ async function loadIntoCncjs() {
   try {
     // gcode:load stops CNCjs's workflow, so only load when nothing is running or paused,
     // the same rule CNCjs's own Upload button follows.
-    const workflow = (await cncjsApi('/api/controllers')).find(c => c.port === port)?.workflow?.state;
+    const controllers = await cncjsApi('/api/controllers');
+    if (!Array.isArray(controllers)) return setLoad('failed', 'Not loaded: CNCjs did not report its controllers.', program);
+    const workflow = controllers.find(c => c.port === port)?.workflow?.state;
     if (!workflow) return setLoad('failed', `Not loaded: ${port} is not open in CNCjs.`, program);
     if (workflow !== 'idle') return setLoad('refused', `Not loaded: a program is ${workflow} on ${port}. Stop it in CNCjs first.`, program);
     await cncjsApi('/api/gcode', { method: 'POST', body: JSON.stringify({ port, name, gcode: program }) });

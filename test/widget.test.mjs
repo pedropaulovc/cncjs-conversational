@@ -54,16 +54,23 @@ test('side face refuses a cut deeper than the stock', async () => {
 
 // Mimic CNCjs 1.11.5: same-origin parent, token on the iframe URL, its default
 // sandbox (no allow-downloads), and a `change` reply to the widget's `connect`.
-async function embedInCncjs({ workflow }) {
+// `controllers` returns the /api/controllers body (a string is sent as HTML);
+// `gate` lets a test hold that reply; `widgetOrigin` serves the widget elsewhere.
+const idle = () => [{ port: 'COM7', workflow: { state: 'idle' } }];
+async function embedInCncjs({ controllers = idle, gate = async () => {}, widgetOrigin = 'http://cncjs.test' } = {}) {
   const html = await readFile(new URL('../web/index.html', import.meta.url), 'utf8');
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
   const host = await ctx.newPage();
   const uploads = [];
-  await ctx.route('http://cncjs.test/**', async route => {
+  await ctx.route(/^http:\/\/(cncjs|widget)\.test\//, async route => {
     const url = new URL(route.request().url());
     if (url.pathname === '/conversational/') return route.fulfill({ contentType: 'text/html', body: html });
     if (url.pathname === '/api/controllers') {
-      return route.fulfill({ contentType: 'application/json', body: JSON.stringify([{ port: 'COM7', workflow: { state: workflow() } }]) });
+      await gate();
+      const body = controllers();
+      return typeof body === 'string'
+        ? route.fulfill({ contentType: 'text/html', body })
+        : route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
     }
     if (url.pathname === '/api/gcode') {
       uploads.push({ auth: route.request().headers().authorization, body: route.request().postDataJSON() });
@@ -71,7 +78,7 @@ async function embedInCncjs({ workflow }) {
     }
     return route.fulfill({ contentType: 'text/html', body: `<!doctype html><body><iframe name="w"
       sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
-      style="width:1400px;height:1000px" src="/conversational/?token=tok123"></iframe><script>
+      style="width:1400px;height:1000px" src="${widgetOrigin}/conversational/?token=tok123"></iframe><script>
       addEventListener('message', e => {
         if (e.data?.token === 'tok123' && e.data.action?.type === 'connect')
           e.source.postMessage({ token: 'tok123', action: { type: 'change', payload: { port: 'COM7', controller: 'Grbl' } } }, '*');
@@ -82,7 +89,7 @@ async function embedInCncjs({ workflow }) {
 }
 
 test('embedded in CNCjs, Load sends the program to /api/gcode', async () => {
-  const { ctx, w, uploads } = await embedInCncjs({ workflow: () => 'idle' });
+  const { ctx, w, uploads } = await embedInCncjs();
   try {
     await w.getByRole('button', { name: 'Circular pocket', exact: true }).click();
     assert.equal(await w.locator('#dl').isHidden(), true);
@@ -107,13 +114,57 @@ test('embedded in CNCjs, Load sends the program to /api/gcode', async () => {
 
 test('embedded in CNCjs, Load refuses while a program is running or paused', async () => {
   let state = 'running';
-  const { ctx, w, uploads } = await embedInCncjs({ workflow: () => state });
+  const { ctx, w, uploads } = await embedInCncjs({ controllers: () => [{ port: 'COM7', workflow: { state } }] });
   try {
     await w.getByRole('button', { name: 'Load in CNCjs' }).click();
     await w.getByText('Not loaded: a program is running on COM7. Stop it in CNCjs first.').waitFor();
     state = 'paused';
     await w.getByRole('button', { name: 'Load in CNCjs' }).click();
     await w.getByText('Not loaded: a program is paused on COM7. Stop it in CNCjs first.').waitFor();
+    assert.equal(uploads.length, 0);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('embedded in CNCjs, Load reports a closed port or an unusable controller list', async () => {
+  let body = [];
+  const { ctx, w, uploads } = await embedInCncjs({ controllers: () => body });
+  try {
+    await w.getByRole('button', { name: 'Load in CNCjs' }).click();
+    await w.getByText('Not loaded: COM7 is not open in CNCjs.').waitFor();
+    body = '<!doctype html><title>Sign in</title>';
+    await w.getByRole('button', { name: 'Load in CNCjs' }).click();
+    await w.getByText('Not loaded: CNCjs did not report its controllers.').waitFor();
+    assert.equal(uploads.length, 0);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('embedded in CNCjs, an edit during a load still shows its outcome', async () => {
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  const { ctx, w } = await embedInCncjs({ controllers: () => [{ port: 'COM7', workflow: { state: 'running' } }], gate: () => held });
+  try {
+    await w.getByRole('button', { name: 'Load in CNCjs' }).click();
+    await w.getByText('Loading square-setup1.nc…').waitFor();
+    await w.getByRole('spinbutton', { name: 'Finished width' }).fill('80');
+    release();
+    await w.getByText('Not loaded: a program is running on COM7. Stop it in CNCjs first. (This was the program before your last edit.)').waitFor();
+    await w.getByRole('spinbutton', { name: 'Finished width' }).fill('85');
+    await w.getByText('Port COM7: loading replaces the program loaded in CNCjs.').waitFor();
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('framed by CNCjs from another origin, Load explains it cannot load', async () => {
+  const { ctx, w, uploads } = await embedInCncjs({ widgetOrigin: 'http://widget.test' });
+  try {
+    await w.getByText('Loading into CNCjs needs the widget served by CNCjs itself (same address and port).').waitFor();
+    assert.equal(await w.getByRole('button', { name: 'Load in CNCjs' }).isDisabled(), true);
+    assert.equal(await w.locator('#dl').isHidden(), true);
     assert.equal(uploads.length, 0);
   } finally {
     await ctx.close();
