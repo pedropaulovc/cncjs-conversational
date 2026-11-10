@@ -1,0 +1,1068 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conversational programming</title>
+<style>
+/* Hallmark · v2.0.0 · fast · scope: app · theme: custom (drafting sheet) · signature: every parameter is the dimension text of the sketch it changes */
+/* critique: one sheet of paper, ink geometry, blue dimension work, orange only ever means toolpath; inputs live where a draftsman would write the number */
+:root {
+  --paper: #ece8df;
+  --sheet: #faf8f3;
+  --field: #ffffff;
+  --ink: #1d2126;
+  --ink-2: #5a6068;
+  --rule: #d3cdbf;
+  --hatch: #a7a294;
+  --dim: #1f56a8;
+  --dim-soft: #1f56a826;
+  --path: #cf5a1c;
+  --path-soft: #cf5a1c2e;
+  --error: #b3261e;
+  --error-soft: #b3261e14;
+  --warn: #8a5a00;
+  --warn-soft: #8a5a0014;
+  --ok: #2c6b3c;
+  --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-num: "IBM Plex Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --r: 6px;
+}
+* { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.45 var(--font-ui); }
+.app { max-width: 1440px; margin: 0 auto; padding: 16px 20px 28px; display: grid; grid-template-columns: 196px minmax(0, 1fr) 360px; gap: 18px; }
+header { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 16px; }
+header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+header p { margin: 0; color: var(--ink-2); font-size: 14px; }
+h2 { margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+
+/* operation rail */
+.ops { display: flex; flex-direction: column; gap: 4px; }
+.ops button { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid transparent; border-radius: var(--r); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: background-color .12s, border-color .12s; }
+.ops button svg { width: 26px; height: 26px; flex: none; color: var(--ink-2); }
+.ops button:hover { background: var(--sheet); }
+.ops button[aria-pressed="true"] { background: var(--sheet); border-color: var(--rule); font-weight: 600; }
+.ops button[aria-pressed="true"] svg { color: var(--path); }
+.checks { margin: 22px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.checks li { padding: 7px 9px; border-radius: var(--r); border-left: 3px solid var(--ok); background: var(--sheet); }
+.checks li[data-lv="warn"] { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
+.checks li[data-lv="error"] { border-color: var(--error); background: var(--error-soft); color: var(--error); }
+
+/* the sheet */
+.sheet { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); padding: 14px 16px 16px; min-width: 0; }
+.view { position: relative; width: 100%; }
+.view svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.view figcaption, .cap { font-size: 13px; color: var(--ink-2); }
+figure { margin: 0; }
+figure + figure { margin-top: 6px; border-top: 1px dashed var(--rule); padding-top: 10px; }
+.overlay { position: absolute; inset: 0; pointer-events: none; }
+
+/* dimension text = input */
+.fld { position: absolute; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 3px; padding: 1px 3px; border-radius: 4px; background: var(--sheet); color: var(--dim); font: 13px/1 var(--font-num); white-space: nowrap; pointer-events: auto; }
+.fld input { width: 6.2ch; padding: 3px 4px; border: 1px solid var(--rule); border-radius: 3px; background: var(--field); color: var(--ink); font: inherit; text-align: right; -moz-appearance: textfield; appearance: textfield; transition: border-color .12s; }
+.fld input::-webkit-outer-spin-button, .fld input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.fld input:hover { border-color: var(--dim); }
+.fld input:focus-visible { outline: 2px solid var(--dim); outline-offset: 1px; border-color: var(--dim); }
+.fld .u { color: var(--ink-2); font-size: 12px; }
+.fld[data-state="warn"] input { border-color: var(--warn); color: var(--warn); }
+.fld[data-state="error"] input { border-color: var(--error); color: var(--error); background: var(--error-soft); }
+.fld[hidden] { display: none; }
+
+/* svg drafting */
+.stock { fill: var(--field); stroke: var(--ink); stroke-width: 1.4; }
+.sect { fill: url(#hatch); stroke: var(--ink); stroke-width: 1.4; }
+.void { fill: var(--sheet); stroke: none; }
+.jaw { fill: var(--rule); stroke: var(--ink-2); stroke-width: 1; }
+.allow { fill: url(#hatch); fill-rule: evenodd; stroke: none; opacity: .8; }
+.fin { fill: var(--field); stroke: var(--ink); stroke-width: 2; }
+.raw { fill: none; stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 6 4; }
+.tp-faint { fill: none; stroke: var(--path); stroke-width: 1; opacity: .35; }
+.dimtxt { fill: var(--dim); font: 12px var(--font-num); }
+.edge { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+.hidden-l { fill: none; stroke: var(--ink); stroke-width: 1; stroke-dasharray: 4 3; }
+.feat { fill: var(--sheet); stroke: var(--ink); stroke-width: 1.6; }
+.hatch { stroke: var(--hatch); stroke-width: 1; }
+.tp { fill: none; stroke: var(--path); stroke-width: 1.2; }
+.tp-rapid { fill: none; stroke: var(--path); stroke-width: 1; stroke-dasharray: 2 4; opacity: .8; }
+.toolmark { fill: var(--path-soft); stroke: var(--path); stroke-width: 1.2; }
+.layer { stroke: var(--path); stroke-width: 1; stroke-dasharray: 5 3; opacity: .7; }
+.ctr { stroke: var(--ink-2); stroke-width: .8; stroke-dasharray: 10 3 2 3; fill: none; }
+.dl { stroke: var(--dim); stroke-width: 1; fill: none; }
+.ext { stroke: var(--dim); stroke-width: .8; opacity: .7; }
+.ah { fill: var(--dim); }
+.ahp { fill: var(--path); }
+.safe { stroke: var(--dim); stroke-width: 1; stroke-dasharray: 6 4; }
+.lbl { fill: var(--ink-2); font: 12px var(--font-ui); }
+.dg.on .dl, .dg.on .ext { stroke: var(--dim); stroke-width: 2.2; opacity: 1; }
+.dg.on .feat, .dg.on .edge { stroke: var(--dim); }
+
+/* right column */
+.side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.toolrow { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+#f-step { display: grid; grid-template-columns: 200px minmax(0, 1fr); align-items: center; gap: 12px; }
+#f-step[hidden] { display: none; }
+.code { display: flex; flex-direction: column; min-height: 0; }
+.code-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.code-head h2 { margin: 0; margin-right: auto; }
+.stats { font-size: 13px; color: var(--ink-2); margin: 0 0 8px; }
+.stats b { color: var(--ink); font-weight: 600; }
+pre { margin: 0; height: 400px; overflow: auto; padding: 10px 12px; background: var(--field); border: 1px solid var(--rule); border-radius: var(--r); font: 12.5px/1.5 var(--font-num); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+pre .c { color: var(--ink-2); }
+pre .g0 { color: var(--dim); }
+pre .arc { color: var(--path); }
+.btn { padding: 6px 12px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--field); color: var(--ink); font: 14px var(--font-ui); cursor: pointer; transition: border-color .12s, background-color .12s; }
+.btn:hover { border-color: var(--ink-2); }
+.btn:active { background: var(--paper); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:focus-visible, .ops button:focus-visible { outline: 2px solid var(--dim); outline-offset: 2px; }
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--sheet); }
+.setup { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; padding-bottom: 12px; border-bottom: 1px dashed var(--rule); }
+.setup[hidden] { display: none; }
+.setup > span { font-size: 14px; color: var(--ink-2); margin-right: 4px; }
+.setup button { padding: 6px 12px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--field); color: var(--ink); font: 14px var(--font-ui); cursor: pointer; transition: border-color .12s, background-color .12s; }
+.setup button:hover { border-color: var(--ink-2); }
+.setup button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--sheet); }
+.setup button:focus-visible { outline: 2px solid var(--dim); outline-offset: 2px; }
+.setup p { flex-basis: 100%; margin: 4px 0 0; font-size: 13px; color: var(--ink-2); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 1100px) { .app { grid-template-columns: minmax(0, 1fr); } .ops { flex-direction: row; flex-wrap: wrap; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Conversational</h1>
+    <p>Units mm, work offset G54 with X0 Y0 at the front-left corner and Z0 on top of stock, Grbl output.</p>
+  </header>
+
+  <nav aria-label="Operation">
+    <h2>Operation</h2>
+    <div class="ops" id="ops">
+      <button data-op="square"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="2" y="4" width="22" height="18" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="2.5 2"/><rect x="6" y="8" width="14" height="10" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>Square up stock</button>
+      <button data-op="face"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="6" width="20" height="14" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M1 9h24M25 9v4M25 13H1M1 13v4M1 17h24" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>Face</button>
+      <button data-op="side"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="5" width="20" height="16" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3 17h20" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="2 2"/><path d="M1 23h24" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>Side face</button>
+      <button data-op="rect"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="5" width="20" height="16" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="7" y="9" width="12" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>Rectangular pocket</button>
+      <button data-op="circ"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="5" width="20" height="16" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="13" cy="13" r="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>Circular pocket</button>
+      <button data-op="bolt"><svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="8" fill="none" stroke="currentColor" stroke-width=".9" stroke-dasharray="3 2"/><circle cx="21" cy="13" r="2" fill="currentColor"/><circle cx="9" cy="19.9" r="2" fill="currentColor"/><circle cx="9" cy="6.1" r="2" fill="currentColor"/></svg>Bolt circle</button>
+    </div>
+    <ul class="checks" id="checks" aria-live="polite"></ul>
+  </nav>
+
+  <main class="sheet" aria-label="Sketch">
+    <div class="setup" id="setup" hidden>
+      <span>Setup</span>
+      <button data-setup="1">1: face top, cut sides</button>
+      <button data-setup="2">2: flip, face to thickness</button>
+      <p id="setup-note"></p>
+    </div>
+    <div class="setup" id="sidepick" hidden>
+      <span>Side</span>
+      <button data-side="y-">Front (Y−)</button>
+      <button data-side="y+">Back (Y+)</button>
+      <button data-side="x-">Left (X−)</button>
+      <button data-side="x+">Right (X+)</button>
+      <p>Climb cut along the side, one radial pass per stepover, retracting to come back.</p>
+    </div>
+    <figure>
+      <figcaption>Plan, looking down Z</figcaption>
+      <div class="view" id="v-plan"></div>
+    </figure>
+    <figure>
+      <figcaption id="sec-cap">Section through centre, Z exaggerated</figcaption>
+      <div class="view" id="v-sec"></div>
+    </figure>
+    <noscript><p>This widget draws the sketch and its inputs with JavaScript.</p></noscript>
+  </main>
+
+  <aside class="side">
+    <section class="sheet">
+      <h2>Tool</h2>
+      <div class="toolrow">
+        <figure><div class="view" id="v-tool"></div></figure>
+        <figure id="f-step"><div class="view" id="v-step"></div><p class="cap">Stepover, % of tool Ø</p></figure>
+      </div>
+    </section>
+    <section class="sheet code">
+      <div class="code-head">
+        <h2>G-code</h2>
+        <button class="btn" id="copy">Copy</button>
+        <button class="btn primary" id="dl">Download .nc</button>
+      </div>
+      <p class="stats" id="stats"></p>
+      <pre id="gcode" aria-label="Generated G-code"></pre>
+    </section>
+  </aside>
+</div>
+
+<script>
+const VIEWS = {
+  plan: { vb: [800, 470] },
+  sec:  { vb: [800, 240] },
+  tool: { vb: [420, 172] },
+  step: { vb: [220, 150] },
+};
+
+const st = {
+  op: 'square',
+  stock: { w: 100, h: 60, t: 20 },
+  safeZ: 5,
+  stepdown: 1.5,
+  tool: { d: 6.35, rpm: 12000, feed: 800, plunge: 200, step: 45 },
+  face: { depth: 0.5 },
+  rect: { cx: 50, cy: 30, w: 50, l: 30, r: 6, depth: 6 },
+  circ: { cx: 50, cy: 30, d: 40, depth: 6 },
+  bolt: { cx: 50, cy: 30, bcd: 40, n: 6, a0: 0, hd: 5, depth: 8, peck: 2 },
+  sq: { setup: 1, w: 90, h: 50, t: 16, top: 1, wall: 17, stick: 18 },
+  side: { side: 'y-', amt: 3, depth: 12 },
+};
+
+// t: visible dimension text, a: accessible name, u: unit suffix
+const F = {
+  'stock.w': { t: 'W', a: 'Stock width along X', min: 1 },
+  'stock.h': { t: 'H', a: 'Stock height along Y', min: 1 },
+  'stock.t': { t: 'T', a: 'Stock thickness', min: 0.1 },
+  'safeZ': { t: 'clear', a: 'Clearance height above Z0', min: 0 },
+  'stepdown': { t: 'step', a: 'Step down per pass', min: 0.05 },
+  'face.depth': { t: 'depth', a: 'Facing depth', min: 0.01 },
+  'rect.cx': { t: 'X', a: 'Pocket centre X' }, 'rect.cy': { t: 'Y', a: 'Pocket centre Y' },
+  'rect.w': { t: 'W', a: 'Pocket width', min: 0.1 }, 'rect.l': { t: 'L', a: 'Pocket length', min: 0.1 },
+  'rect.r': { t: 'R', a: 'Pocket corner radius', min: 0 }, 'rect.depth': { t: 'depth', a: 'Pocket depth', min: 0.01 },
+  'circ.cx': { t: 'X', a: 'Pocket centre X' }, 'circ.cy': { t: 'Y', a: 'Pocket centre Y' },
+  'circ.d': { t: 'Ø', a: 'Pocket diameter', min: 0.1 }, 'circ.depth': { t: 'depth', a: 'Pocket depth', min: 0.01 },
+  'bolt.cx': { t: 'X', a: 'Bolt circle centre X' }, 'bolt.cy': { t: 'Y', a: 'Bolt circle centre Y' },
+  'bolt.bcd': { t: 'Ø', a: 'Bolt circle diameter', min: 0.1 }, 'bolt.n': { t: '×', a: 'Hole count', min: 1, step: 1 },
+  'bolt.a0': { t: '∠', a: 'Start angle from +X', u: '°', step: 5 }, 'bolt.hd': { t: 'Ø', a: 'Drill diameter', min: 0.1 },
+  'bolt.depth': { t: 'depth', a: 'Hole depth to drill tip', min: 0.01 }, 'bolt.peck': { t: 'peck', a: 'Peck depth', min: 0.05 },
+  'sq.w': { t: 'W', a: 'Finished width', min: 0.1 }, 'sq.h': { t: 'H', a: 'Finished height', min: 0.1 },
+  'sq.t': { t: 'T', a: 'Finished thickness', min: 0.1 }, 'sq.top': { t: 'top', a: 'Take off the top in setup 1', min: 0 },
+  'sq.wall': { t: 'sides', a: 'Side cut depth in setup 1', min: 0.1 }, 'sq.stick': { t: 'above jaws', a: 'Stock height above the vise jaws', min: 0.1 },
+  'side.amt': { t: 'remove', a: 'Material to remove from the side', min: 0.01 },
+  'side.depth': { t: 'depth', a: 'Side depth below Z0', min: 0.01 },
+  'tool.d': { t: 'Ø', a: 'Tool diameter', min: 0.1 },
+  'tool.rpm': { t: 'S', a: 'Spindle speed', u: 'rpm', step: 100, min: 1 },
+  'tool.feed': { t: 'F', a: 'Cutting feed', u: 'mm/min', step: 10, min: 1 },
+  'tool.plunge': { t: 'F', a: 'Plunge feed', u: 'mm/min', step: 10, min: 1 },
+  'tool.step': { t: '', a: 'Stepover percent of tool diameter', u: '%', step: 1, min: 1, max: 100 },
+};
+
+const COMMON = ['stock.w', 'stock.h', 'stock.t', 'safeZ'];
+const MILL = ['tool.d', 'tool.rpm', 'tool.feed', 'tool.plunge', 'tool.step'];
+const OPS = {
+  face: { name: 'Face', fields: [...COMMON, 'face.depth', ...MILL] },
+  rect: { name: 'Rectangular pocket', fields: [...COMMON, 'stepdown', 'rect.cx', 'rect.cy', 'rect.w', 'rect.l', 'rect.r', 'rect.depth', ...MILL] },
+  circ: { name: 'Circular pocket', fields: [...COMMON, 'stepdown', 'circ.cx', 'circ.cy', 'circ.d', 'circ.depth', ...MILL] },
+  side: { name: 'Side face', fields: [...COMMON, 'stepdown', 'side.amt', 'side.depth', ...MILL] },
+  square: { name: 'Square up stock', fields: [...COMMON, 'stepdown', 'sq.w', 'sq.h', 'sq.t', 'sq.top', 'sq.wall', 'sq.stick', ...MILL] },
+  bolt: { name: 'Bolt circle', fields: [...COMMON, 'bolt.cx', 'bolt.cy', 'bolt.bcd', 'bolt.n', 'bolt.a0', 'bolt.hd', 'bolt.depth', 'bolt.peck', 'tool.rpm', 'tool.plunge'] },
+};
+
+const get = p => p.split('.').reduce((o, k) => o[k], st);
+const set = (p, v) => { const k = p.split('.'); const last = k.pop(); k.reduce((o, x) => o[x], st)[last] = v; };
+const n2 = v => +v.toFixed(2);
+const fmt = v => String(Math.round(v * 1000) / 1000);
+const rad = d => d * Math.PI / 180;
+
+// ---------- view scaffolding ----------
+const DEFS = `<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0,1.5 L10,5 L0,8.5z"/></marker>
+  <marker id="ap" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ahp" d="M0,1.5 L10,5 L0,8.5z"/></marker>
+  <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hatch" x1="0" y1="0" x2="0" y2="7"/></pattern>
+</defs>`;
+
+for (const [id, v] of Object.entries(VIEWS)) {
+  const el = document.getElementById('v-' + id);
+  el.style.aspectRatio = `${v.vb[0]} / ${v.vb[1]}`;
+  el.innerHTML = `<svg viewBox="0 0 ${v.vb[0]} ${v.vb[1]}" aria-hidden="true">${DEFS}<g></g></svg><div class="overlay"></div>`;
+  v.g = el.querySelector('g:last-of-type');
+  v.ov = el.querySelector('.overlay');
+}
+
+const inputs = {};
+let active = null;
+
+function buildInputs() {
+  for (const v of Object.values(VIEWS)) v.ov.replaceChildren();
+  for (const k of Object.keys(inputs)) delete inputs[k];
+  for (const p of OPS[st.op].fields) {
+    const f = F[p];
+    const lab = document.createElement('label');
+    lab.className = 'fld';
+    lab.innerHTML = `${f.t ? `<span>${f.t}</span>` : ''}<input type="number" inputmode="decimal" aria-label="${f.a}" step="${f.step ?? 0.1}" ${f.min != null ? `min="${f.min}"` : ''} ${f.max != null ? `max="${f.max}"` : ''}>${f.u ? `<span class="u">${f.u}</span>` : ''}`;
+    const inp = lab.querySelector('input');
+    inp.value = get(p);
+    inp.addEventListener('input', () => {
+      const v = parseFloat(inp.value);
+      const bad = !Number.isFinite(v) || (f.min != null && v < f.min) || (f.max != null && v > f.max);
+      lab.dataset.state = bad ? 'error' : '';
+      if (bad) return;
+      set(p, p === 'bolt.n' ? Math.max(1, Math.round(v)) : v);
+      render();
+    });
+    inp.addEventListener('focus', () => { active = p; render(); });
+    inp.addEventListener('blur', () => { active = null; render(); });
+    inputs[p] = lab;
+  }
+}
+
+// ---------- svg helpers ----------
+const ln = (c, x1, y1, x2, y2, extra = '') => `<line class="${c}" x1="${n2(x1)}" y1="${n2(y1)}" x2="${n2(x2)}" y2="${n2(y2)}" ${extra}/>`;
+const ext = (x1, y1, x2, y2) => ln('ext', x1, y1, x2, y2);
+const dl = (x1, y1, x2, y2, ends = 'both') => {
+  const tiny = Math.hypot(x2 - x1, y2 - y1) < 3;
+  const s = !tiny && ends !== 'end' ? 'marker-start="url(#a)"' : '';
+  const e = !tiny ? 'marker-end="url(#a)"' : '';
+  return ln('dl', x1, y1, x2, y2, `${s} ${e}`);
+};
+const g = (p, inner) => `<g class="dg${p === active ? ' on' : ''}">${inner}</g>`;
+const cross = (x, y, k = 7) => ln('ctr', x - k, y, x + k, y) + ln('ctr', x, y - k, x, y + k);
+const at = (v, x, y) => ({ v, x, y });
+
+function planFrame() {
+  const [VW, VH] = VIEWS.plan.vb;
+  const { w: W, h: H } = st.stock;
+  const L = 170, R = 140, T = 66, B = 86;
+  const aw = VW - L - R, ah = VH - T - B;
+  const s = Math.min(aw / W, ah / H);
+  const ox = L + (aw - W * s) / 2, top = T + (ah - H * s) / 2, bot = top + H * s;
+  return { s, ox, top, bot, W, H, X: x => ox + x * s, Y: y => bot - y * s };
+}
+
+// ---------- toolpath geometry (mm), shared by sketch and G-code ----------
+const tR = () => st.tool.d / 2;
+const stepMM = () => st.tool.d * st.tool.step / 100;
+const levels = (depth, sd) => { const z = []; for (let d = sd; d < depth - 1e-6; d += sd) z.push(-d); z.push(-depth); return z; };
+
+function circRings() {
+  const R = st.circ.d / 2 - tR();
+  const rs = [];
+  for (let r = R; r > 1e-6; r -= stepMM()) rs.unshift(r);
+  return rs;
+}
+
+function rectLoops() {
+  const { w, l, r } = st.rect;
+  const hw = w / 2 - tR(), hh = l / 2 - tR(), rc = Math.max(Math.min(r, w / 2, l / 2) - tR(), 0);
+  const loops = [];
+  for (let k = 0; hw - k * stepMM() > 1e-6 && hh - k * stepMM() > 1e-6; k++) {
+    loops.unshift({ hw: hw - k * stepMM(), hh: hh - k * stepMM(), rc: Math.max(rc - k * stepMM(), 0) });
+  }
+  return loops;
+}
+
+function rasterPasses(x0, x1, y0, y1) {
+  const ys = [];
+  for (let y = y1 + tR() - stepMM(); ; y -= stepMM()) { ys.push(y); if (y - tR() <= y0) break; }
+  return { ys, xa: x0 - tR() - 2, xb: x1 + tR() + 2 };
+}
+const facePasses = () => rasterPasses(0, st.stock.w, 0, st.stock.h);
+
+// square up: setup 1 faces the top and contours the sides down `wall`; setup 2 flips, faces to T and removes any raw lip
+function sqGeom() {
+  const { w: W, h: H, t: T } = st.stock;
+  const { w, h, t, top, wall, stick } = st.sq;
+  const ax = (W - w) / 2, ay = (H - h) / 2;
+  const tc = T - top;          // thickness after setup 1
+  const face2 = tc - t;        // taken off in setup 2
+  const lip = tc - wall;       // raw-width band left after setup 1, measured down from the setup-2 top
+  const lipCut = lip > face2 + 1e-6 ? lip + 0.2 : 0;
+  return { W, H, T, w, h, t, top, wall, stick, ax, ay, allow: Math.max(ax, ay, 0), tc, face2, lip, lipCut };
+}
+function contourOffsets(allow) {
+  const o = [];
+  for (let k = allow; k > 1e-6; k -= stepMM()) o.push(k);
+  o.push(0);
+  return o;
+}
+
+// side facing: (u along the side, d = tool-centre distance in from the raw face) -> stock coordinates
+function sideGeom() {
+  const { w: W, h: H } = st.stock;
+  const { side, amt, depth } = st.side;
+  const alongY = side[0] === 'x';
+  const len = alongY ? H : W, span = alongY ? W : H;
+  const map = {
+    'y-': (u, d) => [u, d], 'y+': (u, d) => [u, H - d],
+    'x-': (u, d) => [d, u], 'x+': (u, d) => [W - d, u],
+  }[side];
+  // clockwise around the part = climb with M3
+  const climbPlus = side === 'y+' || side === 'x-';
+  const ends = climbPlus ? [-tR() - 2, len + tR() + 2] : [len + tR() + 2, -tR() - 2];
+  // equal radial passes no wider than the stepover
+  const n = Math.max(1, Math.ceil(amt / stepMM() - 1e-6));
+  const ks = Array.from({ length: n }, (_, i) => amt * (i + 1) / n);
+  const passes = ks.map(k => ({ a: map(ends[0], k - tR()), b: map(ends[1], k - tR()) }));
+  return { W, H, side, amt, depth, len, span, map, passes };
+}
+
+function boltHoles() {
+  const { cx, cy, bcd, n, a0 } = st.bolt;
+  return Array.from({ length: n }, (_, i) => {
+    const a = rad(a0 + i * 360 / n);
+    return { x: cx + bcd / 2 * Math.cos(a), y: cy + bcd / 2 * Math.sin(a), a };
+  });
+}
+
+// ---------- plan view ----------
+function centreDims(o, pos, fr, key, cx, cy) {
+  const { X, Y, bot, W } = fr;
+  const C = [X(cx), Y(cy)];
+  const yX = bot + 42, xY = X(W) + 66;
+  o.push(g(key + '.cx', ext(X(0), bot + 6, X(0), yX + 6) + ln('ctr', C[0], C[1], C[0], yX + 6) + dl(X(0), yX, C[0], yX)));
+  o.push(g(key + '.cy', ext(X(W) + 6, Y(0), xY + 6, Y(0)) + ln('ctr', C[0], C[1], xY + 6, C[1]) + dl(xY, Y(0), xY, C[1])));
+  pos[key + '.cx'] = at('plan', (X(0) + C[0]) / 2, yX);
+  pos[key + '.cy'] = at('plan', xY, (Y(0) + C[1]) / 2);
+}
+
+const PLAN = {
+  square(o, pos, fr) {
+    const { X, Y, s } = fr;
+    const q = sqGeom(), one = st.sq.setup === 1;
+    const x0 = X(q.ax), x1 = X(q.ax + q.w), y0 = Y(q.ay + q.h), y1 = Y(q.ay);
+    const cut = one || q.lipCut;
+    if (cut) o.push(`<path class="allow" d="M${n2(X(0))},${n2(Y(q.H))} H${n2(X(q.W))} V${n2(Y(0))} H${n2(X(0))}Z M${n2(x0)},${n2(y0)} H${n2(x1)} V${n2(y1)} H${n2(x0)}Z"/>`);
+    o.push(g('sq.w', `<rect class="fin" x="${n2(x0)}" y="${n2(y0)}" width="${n2(x1 - x0)}" height="${n2(y1 - y0)}"/>`));
+    if (one ? q.top > 0 : q.face2 > 0) {
+      const { ys, xa, xb } = rasterPasses(0, q.W, 0, q.H);
+      const pts = ys.flatMap((y, i) => i % 2 ? [[xb, y], [xa, y]] : [[xa, y], [xb, y]]);
+      o.push(`<polyline class="tp-faint" points="${pts.map(([x, y]) => `${n2(X(x))},${n2(Y(y))}`).join(' ')}"/>`);
+    }
+    if (cut) {
+      const offs = contourOffsets(q.allow);
+      for (const off of offs) {
+        const d = tR() + off;
+        o.push(`<rect class="tp" x="${n2(X(q.ax - d))}" y="${n2(Y(q.ay + q.h + d))}" width="${n2((q.w + 2 * d) * s)}" height="${n2((q.h + 2 * d) * s)}" rx="${n2(d * s)}"/>`);
+      }
+      o.push(`<circle class="toolmark" cx="${n2((x0 + x1) / 2)}" cy="${n2(Y(q.ay - tR() - offs[0]))}" r="${n2(tR() * s)}"/>`);
+    }
+    const yd = y0 + 24, xd = x1 - 60;
+    o.push(g('sq.w', dl(x0, yd, x1, yd)));
+    pos['sq.w'] = at('plan', (x0 + x1) / 2, yd);
+    o.push(g('sq.h', dl(xd, y0, xd, y1)));
+    pos['sq.h'] = at('plan', xd, (y0 + y1) / 2);
+    if (q.ax > 0) {
+      const ya = (y0 + y1) / 2 + 36;
+      o.push(dl(X(0), ya, x0, ya) + `<text class="dimtxt" x="${n2(x0 + 8)}" y="${n2(ya + 4)}">${fmt(q.ax)} per side</text>`);
+    }
+  },
+  side(o, pos, fr) {
+    const { X, Y, s } = fr;
+    const q = sideGeom();
+    const P = ([x, y]) => [X(x), Y(y)];
+    const [r0, r1] = [P(q.map(0, 0)), P(q.map(q.len, q.amt))];
+    const bx = Math.min(r0[0], r1[0]), by = Math.min(r0[1], r1[1]);
+    o.push(g('side.amt', `<rect class="allow" x="${n2(bx)}" y="${n2(by)}" width="${n2(Math.abs(r1[0] - r0[0]))}" height="${n2(Math.abs(r1[1] - r0[1]))}"/>`));
+    const [f0, f1] = [P(q.map(0, q.amt)), P(q.map(q.len, q.amt))];
+    o.push(ln('edge', f0[0], f0[1], f1[0], f1[1]));
+    for (const p of q.passes) {
+      const [a, b] = [P(p.a), P(p.b)];
+      o.push(`<line class="tp" x1="${n2(a[0])}" y1="${n2(a[1])}" x2="${n2(b[0])}" y2="${n2(b[1])}" marker-end="url(#ap)"/>`);
+    }
+    const first = P(q.passes[0].a);
+    o.push(`<circle class="toolmark" cx="${n2(first[0])}" cy="${n2(first[1])}" r="${n2(tR() * s)}"/>`);
+    // remove: dimension across the band at a quarter of the side, box just inside the finished face
+    const [d0, d1] = [P(q.map(q.len * 0.25, 0)), P(q.map(q.len * 0.25, q.amt))];
+    o.push(g('side.amt', dl(d0[0], d0[1], d1[0], d1[1])));
+    const inward = q.side[0] === 'y' ? [0, q.side === 'y-' ? -1 : 1] : [q.side === 'x-' ? 1 : -1, 0];
+    pos['side.amt'] = at('plan', d1[0] + inward[0] * 62, d1[1] + inward[1] * 20);
+  },
+  face(o, pos, fr) {
+    const { X, Y, s } = fr;
+    const { ys, xa, xb } = facePasses();
+    const pts = ys.flatMap((y, i) => i % 2 ? [[xb, y], [xa, y]] : [[xa, y], [xb, y]]);
+    o.push(`<polyline class="tp" points="${pts.map(([x, y]) => `${n2(X(x))},${n2(Y(y))}`).join(' ')}"/>`);
+    o.push(`<circle class="toolmark" cx="${n2(X(xa))}" cy="${n2(Y(ys[0]))}" r="${n2(tR() * s)}"/>`);
+  },
+  rect(o, pos, fr) {
+    const { X, Y, s } = fr;
+    const { cx, cy, w, l, r } = st.rect;
+    const x0 = X(cx - w / 2), x1 = X(cx + w / 2), y0 = Y(cy + l / 2), y1 = Y(cy - l / 2);
+    const rx = Math.min(r, w / 2, l / 2) * s;
+    o.push(g('rect.r', `<rect class="feat" x="${n2(x0)}" y="${n2(y0)}" width="${n2(x1 - x0)}" height="${n2(y1 - y0)}" rx="${n2(rx)}"/>`));
+    for (const lp of rectLoops()) {
+      o.push(`<rect class="tp" x="${n2(X(cx - lp.hw))}" y="${n2(Y(cy + lp.hh))}" width="${n2(2 * lp.hw * s)}" height="${n2(2 * lp.hh * s)}" rx="${n2(lp.rc * s)}"/>`);
+    }
+    const last = rectLoops().at(-1);
+    if (last) o.push(`<circle class="toolmark" cx="${n2(X(cx))}" cy="${n2(Y(cy - last.hh))}" r="${n2(tR() * s)}"/>`);
+    o.push(cross(X(cx), Y(cy)));
+    centreDims(o, pos, fr, 'rect', cx, cy);
+    const yd = y0 + 22, xd = x1 - 58;
+    o.push(g('rect.w', dl(x0, yd, x1, yd)));
+    pos['rect.w'] = at('plan', (x0 + x1) / 2, yd);
+    o.push(g('rect.l', dl(xd, y0, xd, y1)));
+    pos['rect.l'] = at('plan', xd, (y0 + y1) / 2);
+    const cc = [x0 + rx, y0 + rx], k = Math.SQRT1_2;
+    o.push(g('rect.r', dl(cc[0] + 18 * k, cc[1] + 18 * k, cc[0] - rx * k, cc[1] - rx * k, 'end')));
+    pos['rect.r'] = at('plan', cc[0] + 18 * k + 40, cc[1] + 18 * k + 14);
+  },
+  circ(o, pos, fr) {
+    const { X, Y, s } = fr;
+    const { cx, cy, d } = st.circ;
+    const C = [X(cx), Y(cy)], r = d / 2 * s;
+    o.push(g('circ.d', `<circle class="feat" cx="${n2(C[0])}" cy="${n2(C[1])}" r="${n2(r)}"/>`));
+    const rings = circRings();
+    for (const rr of rings) o.push(`<circle class="tp" cx="${n2(C[0])}" cy="${n2(C[1])}" r="${n2(rr * s)}"/>`);
+    if (rings.length) o.push(`<circle class="toolmark" cx="${n2(X(cx + rings.at(-1)))}" cy="${n2(C[1])}" r="${n2(tR() * s)}"/>`);
+    o.push(cross(C[0], C[1]));
+    centreDims(o, pos, fr, 'circ', cx, cy);
+    // diameter dimension drawn across the circle; the value sits inside when it fits
+    const u = [Math.cos(rad(35)), -Math.sin(rad(35))];
+    o.push(g('circ.d', dl(C[0] - u[0] * r, C[1] - u[1] * r, C[0] + u[0] * r, C[1] + u[1] * r)));
+    if (r >= 64) {
+      pos['circ.d'] = at('plan', C[0] + u[0] * r * 0.5, C[1] + u[1] * r * 0.5);
+    } else {
+      const p = [C[0] + u[0] * (r + 30), C[1] + u[1] * (r + 30)];
+      o.push(g('circ.d', ln('dl', C[0] + u[0] * r, C[1] + u[1] * r, p[0], p[1]) + ln('dl', p[0], p[1], p[0] + 16, p[1])));
+      pos['circ.d'] = at('plan', p[0] + 52, p[1]);
+    }
+  },
+  bolt(o, pos, fr) {
+    const { X, Y, s } = fr;
+    const { cx, cy, bcd, n, a0, hd } = st.bolt;
+    const C = [X(cx), Y(cy)], R = bcd / 2 * s, hr = hd / 2 * s;
+    o.push(g('bolt.bcd', `<circle class="ctr" cx="${n2(C[0])}" cy="${n2(C[1])}" r="${n2(R)}"/>`));
+    const holes = boltHoles();
+    o.push(`<polyline class="tp-rapid" points="${holes.map(h => `${n2(X(h.x))},${n2(Y(h.y))}`).join(' ')}"/>`);
+    holes.forEach((h, i) => {
+      o.push((i ? '' : `<g class="dg${active === 'bolt.hd' ? ' on' : ''}">`) + `<circle class="feat" cx="${n2(X(h.x))}" cy="${n2(Y(h.y))}" r="${n2(hr)}"/>` + (i ? '' : '</g>'));
+      o.push(cross(X(h.x), Y(h.y), hr + 4));
+    });
+    o.push(`<circle class="toolmark" cx="${n2(X(holes[0].x))}" cy="${n2(Y(holes[0].y))}" r="${n2(hr)}"/>`);
+    o.push(cross(C[0], C[1]));
+    centreDims(o, pos, fr, 'bolt', cx, cy);
+    // bolt circle diameter, drawn between holes
+    const tb = rad(a0 + 180 / n + 180), u = [Math.cos(tb), -Math.sin(tb)];
+    o.push(g('bolt.bcd', dl(C[0] - u[0] * R, C[1] - u[1] * R, C[0] + u[0] * R, C[1] + u[1] * R)));
+    pos['bolt.bcd'] = at('plan', C[0] + u[0] * R * 0.55, C[1] + u[1] * R * 0.55);
+    pos['bolt.n'] = at('plan', C[0], C[1] - R * 0.45);
+    // start angle from +X
+    const ra = R * 0.36;
+    let ang = ln('ctr', C[0], C[1], C[0] + R + 22, C[1]);
+    const a = ((a0 % 360) + 360) % 360;
+    if (a > 0.5) {
+      const ex = C[0] + ra * Math.cos(rad(a)), ey = C[1] - ra * Math.sin(rad(a));
+      ang += `<path class="dl" d="M${n2(C[0] + ra)},${n2(C[1])} A${n2(ra)},${n2(ra)} 0 ${a > 180 ? 1 : 0} 0 ${n2(ex)},${n2(ey)}" marker-end="url(#a)"/>`;
+    }
+    o.push(g('bolt.a0', ang));
+    pos['bolt.a0'] = at('plan', C[0] + (ra + 30) * Math.cos(rad(a / 2)), C[1] - (ra + 10) * Math.sin(rad(a / 2)) + 26);
+    // drill diameter, leader off the first hole
+    const h0 = holes[0], v = [Math.cos(h0.a), -Math.sin(h0.a)], H0 = [X(h0.x), Y(h0.y)];
+    const p = [H0[0] + v[0] * (hr + 26), H0[1] + v[1] * (hr + 26) - 18];
+    const side = v[0] >= 0 ? 1 : -1;
+    o.push(g('bolt.hd', ln('dl', p[0], p[1], H0[0] + v[0] * hr, H0[1] + v[1] * hr, 'marker-end="url(#a)"') + ln('dl', p[0], p[1], p[0] + side * 14, p[1])));
+    pos['bolt.hd'] = at('plan', p[0] + side * 52, p[1]);
+  },
+};
+
+function drawPlan(o, pos) {
+  const fr = planFrame();
+  const { X, Y, ox, top, bot, s, W, H } = fr;
+  const bare = st.op === 'square' && st.sq.setup === 2 && !sqGeom().lipCut;
+  o.push(`<rect class="${bare ? 'raw' : 'stock'}" x="${n2(ox)}" y="${n2(top)}" width="${n2(W * s)}" height="${n2(H * s)}"/>`);
+  PLAN[st.op](o, pos, fr);
+  // origin: setup 2 of square-up probes the finished corner
+  const sq2 = st.op === 'square' && st.sq.setup === 2;
+  const gx = sq2 ? X(sqGeom().ax) : ox, gy = sq2 ? Y(sqGeom().ay) : bot;
+  o.push(`<line class="dl" x1="${n2(gx)}" y1="${n2(gy)}" x2="${n2(gx + 30)}" y2="${n2(gy)}" marker-end="url(#ap)" style="stroke:var(--path)"/>`);
+  o.push(`<line class="dl" x1="${n2(gx)}" y1="${n2(gy)}" x2="${n2(gx)}" y2="${n2(gy - 30)}" marker-end="url(#ap)" style="stroke:var(--path)"/>`);
+  o.push(`<text class="lbl" x="${n2(gx + 34)}" y="${n2(gy - 4)}">X</text><text class="lbl" x="${n2(gx + 5)}" y="${n2(gy - 34)}">Y</text>`);
+  // stock size
+  const yW = top - 36, xH = ox - 66;
+  o.push(g('stock.w', ext(X(0), top - 6, X(0), yW - 6) + ext(X(W), top - 6, X(W), yW - 6) + dl(X(0), yW, X(W), yW)));
+  o.push(g('stock.h', ext(ox - 6, top, xH - 6, top) + ext(ox - 6, bot, xH - 6, bot) + dl(xH, bot, xH, top)));
+  pos['stock.w'] = at('plan', (X(0) + X(W)) / 2, yW);
+  pos['stock.h'] = at('plan', xH, (top + bot) / 2);
+}
+
+// ---------- section view ----------
+const DEPTH = { face: 'face.depth', rect: 'rect.depth', circ: 'circ.depth', bolt: 'bolt.depth' };
+
+function drawSecSide(o, pos) {
+  const { ox, s } = planFrame();
+  const q = sideGeom(), T = st.stock.t;
+  const zt = 76, zs = Math.min(132 / T, s * 4);
+  const Z = z => zt - z * zs, zb = Z(-T);
+  // section across the faced side, drawn to the plan's scale; the faced side is on its own side of the sheet
+  const minus = q.side.endsWith('-');
+  const xl = ox, xr = ox + q.span * s;
+  const fx = minus ? xl : xr, ix = minus ? xl + q.amt * s : xr - q.amt * s;
+  const zd = Z(-Math.min(q.depth, T));
+  o.push(`<rect class="sect" x="${n2(xl)}" y="${zt}" width="${n2(xr - xl)}" height="${n2(T * zs)}"/>`);
+  o.push(`<rect class="void" x="${n2(Math.min(fx, ix) - 1)}" y="${zt - 1}" width="${n2(Math.abs(ix - fx) + 2)}" height="${n2(zd - zt + 1)}"/>`);
+  o.push(`<path class="edge" d="M${n2(fx)},${n2(zd)} H${n2(ix)} V${zt}"/>`);
+  o.push(`<rect class="raw" x="${n2(Math.min(fx, ix))}" y="${zt}" width="${n2(Math.abs(ix - fx))}" height="${n2(zd - zt)}"/>`);
+  for (const z of levels(Math.min(q.depth, T), st.stepdown).slice(0, -1)) o.push(ln('layer', fx, Z(z), ix, Z(z)));
+
+  const dir = minus ? -1 : 1;
+  const xc = fx + dir * 66, edge = fx + dir * 6;
+  const ys = Math.max(Z(st.safeZ), 16);
+  o.push(ln('safe', xl - 26, ys, xr + 26, ys));
+  o.push(g('safeZ', ext(fx + dir * 30, ys, xc + dir * 6, ys) + ext(edge, zt, xc + dir * 6, zt) + dl(xc, ys, xc, zt)));
+  pos['safeZ'] = at('sec', xc, Math.min((ys + zt) / 2, zt - 17));
+  o.push(g('side.depth', ext(fx + dir * 2, zd, xc + dir * 6, zd) + dl(xc, zt, xc, zd)));
+  pos['side.depth'] = at('sec', xc, Math.max((zt + zd) / 2, zt + 17));
+  const xs = ix - dir * 24, sdz = Z(-Math.min(st.stepdown, q.depth));
+  o.push(g('stepdown', dl(xs, zt, xs, sdz)));
+  pos['stepdown'] = at('sec', xs - dir * 52, zt + 17);
+  const ox2 = minus ? xr : xl, xt = ox2 - dir * 66;
+  o.push(g('stock.t', ext(ox2 - dir * 6, zt, xt - dir * 6, zt) + ext(ox2 - dir * 6, zb, xt - dir * 6, zb) + dl(xt, zt, xt, zb)));
+  pos['stock.t'] = at('sec', xt, (zt + zb) / 2);
+  o.push(`<text class="lbl" text-anchor="${minus ? 'start' : 'end'}" x="${n2(minus ? xr + 34 : xl - 34)}" y="${n2(ys - 6)}">clearance</text>`);
+}
+
+function drawSecSquare(o, pos) {
+  const { X, ox, s } = planFrame();
+  const q = sqGeom(), one = st.sq.setup === 1;
+  const zt = 76, zs = Math.min(132 / q.T, s * 4);
+  const Z = z => zt - z * zs;
+  const xl = X(0), xr = X(q.W), xa = X(q.ax), xb = X(q.ax + q.w);
+  const zb = Z(-(one ? q.T : q.tc));
+  const lipZ = Z(-Math.max(q.lip, 0));
+  const body = one || q.lip <= 0
+    ? `M${n2(one ? xl : xa)},${zt} H${n2(one ? xr : xb)} V${n2(zb)} H${n2(one ? xl : xa)}Z`
+    : `M${n2(xl)},${zt} H${n2(xr)} V${n2(lipZ)} H${n2(xb)} V${n2(zb)} H${n2(xa)} V${n2(lipZ)} H${n2(xl)}Z`;
+  o.push(`<path class="sect" d="${body}"/>`);
+
+  // material removed in this setup
+  const band = (a, b, d) => `<rect class="void" x="${n2(a)}" y="${zt - 2}" width="${n2(b - a)}" height="${n2(d * zs + 2)}"/>`;
+  const top = one ? q.top : Math.max(q.face2, 0);
+  const side = one ? q.wall : q.lipCut;
+  const wide = one || q.lip > 0;
+  if (top > 0) o.push(band(wide ? xl : xa, wide ? xr : xb, top));
+  if (side) o.push(band(xl, xa, side), band(xb, xr, side));
+  o.push(`<path class="edge" d="${side ? `M${n2(xl)},${n2(Z(-side))} H${n2(xa)} V${n2(Z(-top))} H${n2(xb)} V${n2(Z(-side))} H${n2(xr)}` : `M${n2(wide ? xl : xa)},${n2(Z(-top))} H${n2(wide ? xr : xb)}`}"/>`);
+  o.push(`<path class="raw" d="${body}"/>`);
+
+  // vise jaws: raw sides in setup 1, finished sides in setup 2
+  const jt = Z(-q.stick), jb = Math.max(zb, jt) + 16;
+  const gl = one ? xl : xa, gr = one ? xr : xb;
+  o.push(`<rect class="jaw" x="${n2(gl - 26)}" y="${n2(jt)}" width="26" height="${n2(jb - jt)}"/><rect class="jaw" x="${n2(gr)}" y="${n2(jt)}" width="26" height="${n2(jb - jt)}"/>`);
+
+  // clearance and the top cut on the left chain
+  const ys = Math.max(Z(st.safeZ), 16), xc = ox - 66, xs = ox - 128;
+  o.push(ln('safe', xs - 20, ys, xr + 26, ys));
+  o.push(g('safeZ', ext(ox - 30, ys, xc - 6, ys) + ext(ox - 30, zt, xc - 6, zt) + dl(xc, ys, xc, zt)));
+  pos['safeZ'] = at('sec', xc, Math.min((ys + zt) / 2, zt - 17));
+  const topDim = ext(xl - 4, Z(-top), xc - 6, Z(-top)) + dl(xc, zt, xc, Z(-top));
+  if (one) {
+    o.push(g('sq.top', topDim));
+    pos['sq.top'] = at('sec', xc, Math.max((zt + Z(-top)) / 2, zt + 17));
+  } else {
+    o.push(topDim + `<text class="dimtxt" text-anchor="end" x="${n2(xc - 8)}" y="${n2(Math.max((zt + Z(-top)) / 2, zt + 17) + 4)}">face ${fmt(top)}</text>`);
+  }
+  // stick-out above the jaws
+  o.push(g('sq.stick', ext(gl - 30, jt, xs - 6, jt) + ext(xc - 10, zt, xs - 6, zt) + dl(xs, zt, xs, jt)));
+  pos['sq.stick'] = at('sec', xs, (zt + jt) / 2 + 10);
+  // side cut, measured in the right-hand band
+  if (side) {
+    const xw = (xb + xr) / 2, mid = (zt + Z(-side)) / 2;
+    if (one) {
+      o.push(g('sq.wall', dl(xw, zt, xw, Z(-side))));
+      pos['sq.wall'] = at('sec', xb - 58, mid);
+    } else {
+      o.push(dl(xw, zt, xw, Z(-side)) + `<text class="dimtxt" text-anchor="end" x="${n2(xb - 8)}" y="${n2(Z(-side) + 16)}">lip ${fmt(side)}</text>`);
+    }
+    const xm = (xl + xa) / 2, sdz = Z(-Math.min(st.stepdown, side));
+    o.push(g('stepdown', dl(xm, zt, xm, sdz)));
+    pos['stepdown'] = at('sec', xa + 58, zt + 17);
+  }
+  // thickness on the right: raw in setup 1, finished in setup 2
+  const xt = xr + 70;
+  if (one) {
+    o.push(g('stock.t', ext(xr + 30, zt, xt + 6, zt) + ext(xr + 30, zb, xt + 6, zb) + dl(xt, zt, xt, zb)));
+    pos['stock.t'] = at('sec', xt, (zt + zb) / 2);
+  } else {
+    o.push(g('sq.t', ext(xb + 30, Z(-top), xt + 6, Z(-top)) + ext(xb + 30, zb, xt + 6, zb) + dl(xt, Z(-top), xt, zb)));
+    pos['sq.t'] = at('sec', xt, (Z(-top) + zb) / 2);
+  }
+  o.push(`<text class="lbl" x="${n2(xr + 34)}" y="${n2(ys - 6)}">clearance</text><text class="lbl" x="${n2(xr + 34)}" y="${zt - 6}">Z0</text>`);
+}
+
+function drawSec(o, pos) {
+  if (st.op === 'square') return drawSecSquare(o, pos);
+  if (st.op === 'side') return drawSecSide(o, pos);
+  const { X, ox, W, s } = planFrame();
+  const T = st.stock.t;
+  const zt = 76, zs = Math.min(132 / T, s * 4);
+  const Z = z => zt - z * zs, zb = Z(-T);
+  const depth = get(DEPTH[st.op]);
+  o.push(`<rect class="sect" x="${n2(ox)}" y="${zt}" width="${n2(W * s)}" height="${n2(T * zs)}"/>`);
+
+  let first = null; // the cut that carries the in-feature dimensions
+  if (st.op === 'bolt') {
+    const tip = 0.3 * st.bolt.hd;
+    for (const h of boltHoles()) {
+      const a = X(h.x - st.bolt.hd / 2), b = X(h.x + st.bolt.hd / 2), m = X(h.x);
+      const wallZ = Z(-Math.max(depth - tip, 0));
+      o.push(`<path class="void" d="M${n2(a)},${zt - 1} V${n2(wallZ)} L${n2(m)},${n2(Z(-depth))} L${n2(b)},${n2(wallZ)} V${zt - 1}Z"/>`);
+      o.push(`<path class="edge" d="M${n2(a)},${zt} V${n2(wallZ)} L${n2(m)},${n2(Z(-depth))} L${n2(b)},${n2(wallZ)} V${zt}"/>`);
+    }
+    const h0 = boltHoles().reduce((p, h) => (h.x > p.x ? h : p));
+    first = { a: X(h0.x - st.bolt.hd / 2), b: X(h0.x + st.bolt.hd / 2) };
+  } else {
+    const iv = st.op === 'face' ? [0, W] : st.op === 'rect' ? [st.rect.cx - st.rect.w / 2, st.rect.cx + st.rect.w / 2] : [st.circ.cx - st.circ.d / 2, st.circ.cx + st.circ.d / 2];
+    const a = X(Math.max(iv[0], 0)), b = X(Math.min(iv[1], W));
+    o.push(`<rect class="void" x="${n2(a)}" y="${zt - 2}" width="${n2(b - a)}" height="${n2(depth * zs + 2)}"/>`);
+    o.push(`<path class="edge" d="M${n2(a)},${zt} V${n2(Z(-depth))} H${n2(b)} V${zt}"/>`);
+    first = { a, b };
+    if (st.op !== 'face') {
+      for (const z of levels(depth, st.stepdown).slice(0, -1)) o.push(ln('layer', a + 3, Z(z), b - 3, Z(z)));
+      const xm = (a + b) / 2, sdz = Z(-Math.min(st.stepdown, depth));
+      o.push(g('stepdown', dl(xm, zt, xm, sdz)));
+      pos['stepdown'] = at('sec', xm + 62, Math.max((zt + sdz) / 2, zt + 15));
+    }
+  }
+
+  // clearance plane
+  const ys = Math.max(Z(st.safeZ), 16);
+  o.push(ln('safe', ox - 26, ys, X(W) + 26, ys));
+  // left chain: clearance above, depth below
+  const xc = ox - 66;
+  o.push(g('safeZ', ext(ox - 30, ys, xc - 6, ys) + ext(ox - 6, zt, xc - 6, zt) + dl(xc, ys, xc, zt)));
+  o.push(g(DEPTH[st.op], ext(first.a - 4, Z(-depth), xc - 6, Z(-depth)) + dl(xc, zt, xc, Z(-depth))));
+  const ySafe = (ys + zt) / 2;
+  pos['safeZ'] = at('sec', xc, Math.min(ySafe, zt - 17));
+  pos[DEPTH[st.op]] = at('sec', xc, Math.max((zt + Z(-depth)) / 2, zt + 17));
+  // thickness on the right
+  const xt = X(W) + 66;
+  o.push(g('stock.t', ext(X(W) + 6, zt, xt + 6, zt) + ext(X(W) + 6, zb, xt + 6, zb) + dl(xt, zt, xt, zb)));
+  pos['stock.t'] = at('sec', xt, (zt + zb) / 2);
+  // peck bracket beside the right-most hole
+  if (st.op === 'bolt') {
+    const xp = first.b + 12, pz = Z(-Math.min(st.bolt.peck, depth));
+    o.push(g('bolt.peck', ext(first.b + 2, zt, xp + 6, zt) + dl(xp, zt, xp, pz)));
+    pos['bolt.peck'] = at('sec', xp + 54, Math.max((zt + pz) / 2, zt + 15));
+  }
+  o.push(`<text class="lbl" x="${n2(X(W) + 30)}" y="${n2(ys - 6)}">clearance</text><text class="lbl" x="${n2(X(W) + 30)}" y="${zt - 6}">Z0</text>`);
+}
+
+// ---------- tool views ----------
+function drawTool(o, pos) {
+  const drill = st.op === 'bolt';
+  o.push(`<rect class="feat" x="132" y="12" width="36" height="62"/>`);
+  if (drill) {
+    o.push(`<path class="feat" d="M137,74 V132 L150,148 L163,132 V74Z"/><path class="ctr" d="M137,90 L163,104 M137,108 L163,122"/>`);
+  } else {
+    o.push(`<path class="feat" d="M136,74 V142 H164 V74Z"/><path class="ctr" d="M136,84 L164,100 M136,104 L164,120 M136,124 L164,140"/>`);
+    o.push(g('tool.d', ext(136, 146, 136, 166) + ext(164, 146, 164, 166) + dl(136, 160, 164, 160) + ln('dl', 164, 160, 186, 160)));
+    pos['tool.d'] = at('tool', 232, 160);
+    o.push(g('tool.feed', `<line class="dl" x1="184" y1="122" x2="232" y2="122" marker-end="url(#a)"/>`));
+    pos['tool.feed'] = at('tool', 322, 122);
+  }
+  o.push(g('tool.rpm', `<path class="dl" d="M124,28 A28,9 0 1 0 176,28" marker-end="url(#a)"/>`));
+  pos['tool.rpm'] = at('tool', 58, 30);
+  o.push(g('tool.plunge', `<line class="dl" x1="192" y1="36" x2="192" y2="84" marker-end="url(#a)"/>`));
+  pos['tool.plunge'] = at('tool', 292, 60);
+}
+
+function drawStep(o, pos) {
+  const r = 38, x1 = 62, x2 = x1 + 2 * r * st.tool.step / 100, y = 92;
+  o.push(`<circle class="toolmark" cx="${x1}" cy="${y}" r="${r}"/><circle class="tp" cx="${n2(x2)}" cy="${y}" r="${r}"/>`);
+  o.push(cross(x1, y, 5) + cross(x2, y, 5));
+  o.push(g('tool.step', ext(x1, y - 8, x1, 30) + ext(x2, y - 8, x2, 30) + dl(x1, 36, x2, 36)));
+  pos['tool.step'] = at('step', Math.max((x1 + x2) / 2, 80), 36);
+}
+
+// ---------- checks ----------
+function check() {
+  const I = [];
+  const add = (lv, text, ...f) => I.push({ lv, text, f });
+  const { w: W, h: H, t: T } = st.stock;
+  const out = (x0, x1, y0, y1) => x0 < 0 || y0 < 0 || x1 > W || y1 > H;
+  if (st.op === 'circ') {
+    const { cx, cy, d, depth } = st.circ;
+    if (d <= st.tool.d) add('error', 'Pocket Ø must be larger than tool Ø.', 'circ.d', 'tool.d');
+    if (out(cx - d / 2, cx + d / 2, cy - d / 2, cy + d / 2)) add('warn', 'Pocket breaks out of the stock.', 'circ.cx', 'circ.cy', 'circ.d');
+    if (depth >= T) add('error', 'Depth goes through the stock.', 'circ.depth', 'stock.t');
+  }
+  if (st.op === 'rect') {
+    const { cx, cy, w, l, r, depth } = st.rect;
+    if (Math.min(w, l) <= st.tool.d) add('error', 'Pocket W and L must exceed tool Ø.', 'rect.w', 'rect.l', 'tool.d');
+    if (r > Math.min(w, l) / 2) add('error', 'Corner R is larger than half the pocket.', 'rect.r');
+    else if (r < tR()) add('warn', `Corner R below tool radius: corners will come out R${fmt(tR())}.`, 'rect.r', 'tool.d');
+    else if (r < tR() * 1.15) add('warn', 'Corner R is close to tool radius: the tool will rub in the corners.', 'rect.r', 'tool.d');
+    if (out(cx - w / 2, cx + w / 2, cy - l / 2, cy + l / 2)) add('warn', 'Pocket breaks out of the stock.', 'rect.cx', 'rect.cy', 'rect.w', 'rect.l');
+    if (depth >= T) add('error', 'Depth goes through the stock.', 'rect.depth', 'stock.t');
+  }
+  if (st.op === 'face' && st.face.depth > 1) add('warn', 'More than 1 mm in a single facing pass.', 'face.depth');
+  if (st.op === 'square') {
+    const q = sqGeom(), one = st.sq.setup === 1;
+    if (q.w > q.W || q.h > q.H) add('error', 'Finished size is larger than the raw stock.', 'sq.w', 'sq.h', 'stock.w', 'stock.h');
+    else if (q.allow < 0.2) add('warn', 'Under 0.2 mm per side to clean up.', 'sq.w', 'sq.h');
+    if (q.t > q.tc) add('error', 'Finished T is thicker than the stock left after setup 1.', 'sq.t', 'sq.top', 'stock.t');
+    if (q.stick >= q.T) add('error', 'Height above the jaws is more than the stock thickness.', 'sq.stick', 'stock.t');
+    if (one && q.wall > q.stick - 0.5) add('error', 'Side cut reaches the vise jaws: cut shallower or raise the stock.', 'sq.wall', 'sq.stick');
+    if (one && q.lipCut) add('warn', `Sides cut ${fmt(q.wall)} of ${fmt(q.t)} mm: setup 2 will contour the leftover lip.`, 'sq.wall');
+    if (!one && q.lipCut > q.stick - 0.5) add('error', 'Leftover lip sits below the jaws: cut deeper sides in setup 1.', 'sq.wall', 'sq.stick');
+  }
+  if (st.op === 'side') {
+    const q = sideGeom();
+    if (q.amt >= q.span) add('error', 'Removing more than the stock is wide across this side.', 'side.amt');
+    else if (q.amt > st.tool.d) add('warn', 'More than one tool Ø off the side: consider pocketing or a roughing pass.', 'side.amt', 'tool.d');
+    if (q.depth > st.stock.t) add('error', 'Side depth is deeper than the stock.', 'side.depth', 'stock.t');
+    else if (q.depth > st.stock.t - 0.5) add('warn', 'Full-height side: raise the stock so the tool clears the vise jaws and parallels.', 'side.depth');
+  }
+  if (st.op === 'bolt') {
+    const { bcd, n, hd, depth, cx, cy } = st.bolt;
+    if (n > 1 && bcd * Math.sin(Math.PI / n) <= hd) add('error', 'Holes overlap: increase Ø or reduce count.', 'bolt.bcd', 'bolt.n', 'bolt.hd');
+    if (boltHoles().some(h => out(h.x - hd / 2, h.x + hd / 2, h.y - hd / 2, h.y + hd / 2))) add('warn', 'A hole breaks out of the stock.', 'bolt.cx', 'bolt.cy', 'bolt.bcd');
+    if (depth >= T) add('warn', 'Holes go through the stock: check what is underneath.', 'bolt.depth', 'stock.t');
+  }
+  if (st.op !== 'bolt' && st.op !== 'face' && st.stepdown > st.tool.d) add('warn', 'Step down deeper than tool Ø.', 'stepdown', 'tool.d');
+  if (st.safeZ < 1) add('warn', 'Clearance under 1 mm above the stock.', 'safeZ');
+  return I;
+}
+
+// ---------- G-code ----------
+function header(lines) {
+  const { w, h, t } = st.stock;
+  const sq2 = st.op === 'square' && st.sq.setup === 2;
+  lines.push(`(${OPS[st.op].name}${st.op === 'square' ? `, setup ${st.sq.setup} of 2` : ''}, generated by cncjs-conversational)`,
+    `(stock ${fmt(w)} x ${fmt(h)} x ${fmt(t)}, X0 Y0 ${sq2 ? 'finished front-left' : 'front-left'}, Z0 top)`,
+    st.op === 'bolt' ? `(drill Ø${fmt(st.bolt.hd)})` : `(flat end mill Ø${fmt(st.tool.d)}, stepover ${fmt(st.tool.step)}%)`,
+    'G21 G90 G17 G94', 'G54', `M3 S${fmt(st.tool.rpm)}`, `G0 Z${fmt(st.safeZ)}`);
+}
+function footer(lines) { lines.push(`G0 Z${fmt(st.safeZ)}`, 'M5', 'M30'); }
+
+function faceCode(L, { ys, xa, xb }, zs) {
+  for (const z of zs) {
+    L.push(`G0 X${fmt(xa)} Y${fmt(ys[0])}`, `G1 Z${fmt(z)} F${fmt(st.tool.plunge)}`);
+    ys.forEach((y, i) => {
+      if (i) L.push(`G1 Y${fmt(y)}`);
+      L.push(`G1 X${fmt(i % 2 ? xa : xb)}${i ? '' : ` F${fmt(st.tool.feed)}`}`);
+    });
+    L.push('G0 Z1');
+  }
+}
+
+// outside contour around [x0,x1]x[y0,y1], clockwise (climb with M3), outermost offset first
+function contourCode(L, x0, y0, x1, y1, offs, zs) {
+  const P = (x, y) => `X${fmt(x)} Y${fmt(y)}`;
+  const xm = (x0 + x1) / 2;
+  for (const z of zs) {
+    L.push(`(contour Z${fmt(z)})`, `G0 ${P(xm, y0 - tR() - offs[0])}`, `G1 Z${fmt(z)} F${fmt(st.tool.plunge)}`);
+    offs.forEach((off, i) => {
+      const d = tR() + off;
+      L.push(`G1 ${P(xm, y0 - d)}${i ? '' : ` F${fmt(st.tool.feed)}`}`,
+        `G1 ${P(x0, y0 - d)}`, `G2 ${P(x0 - d, y0)} I0 J${fmt(d)}`,
+        `G1 ${P(x0 - d, y1)}`, `G2 ${P(x0, y1 + d)} I${fmt(d)} J0`,
+        `G1 ${P(x1, y1 + d)}`, `G2 ${P(x1 + d, y1)} I0 J${fmt(-d)}`,
+        `G1 ${P(x1 + d, y0)}`, `G2 ${P(x1, y0 - d)} I${fmt(-d)} J0`,
+        `G1 ${P(xm, y0 - d)}`);
+    });
+    L.push('G0 Z1');
+  }
+}
+
+const GEN = {
+  face(L) {
+    faceCode(L, facePasses(), [-st.face.depth]);
+  },
+  square(L) {
+    const q = sqGeom();
+    if (st.sq.setup === 1) {
+      if (q.top > 1e-6) { L.push('(face the top)'); faceCode(L, rasterPasses(0, q.W, 0, q.H), levels(q.top, st.stepdown)); }
+      L.push('(cut the sides to finished W x H)');
+      contourCode(L, q.ax, q.ay, q.ax + q.w, q.ay + q.h, contourOffsets(q.allow), levels(q.wall, st.stepdown));
+      return;
+    }
+    if (q.face2 > 1e-6) { L.push('(face to finished thickness)'); faceCode(L, rasterPasses(-q.ax, q.w + q.ax, -q.ay, q.h + q.ay), levels(q.face2, st.stepdown)); }
+    if (q.lipCut) {
+      L.push('(remove the leftover lip)');
+      contourCode(L, 0, 0, q.w, q.h, contourOffsets(q.allow), levels(q.lipCut, st.stepdown).filter(z => z < -q.face2 + 1e-6));
+    }
+  },
+  side(L) {
+    const q = sideGeom();
+    const P = ([x, y]) => `X${fmt(x)} Y${fmt(y)}`;
+    for (const z of levels(q.depth, st.stepdown)) {
+      L.push(`(level Z${fmt(z)})`);
+      q.passes.forEach((p, i) => {
+        L.push(`G0 ${P(p.a)}`, `G1 Z${fmt(z)} F${fmt(st.tool.plunge)}`, `G1 ${P(p.b)}${i ? '' : ` F${fmt(st.tool.feed)}`}`, 'G0 Z1');
+      });
+    }
+  },
+  circ(L) {
+    const { cx, cy, depth } = st.circ;
+    L.push(`G0 X${fmt(cx)} Y${fmt(cy)}`, `G0 Z1`);
+    for (const z of levels(depth, st.stepdown)) {
+      L.push(`(level Z${fmt(z)})`, `G1 Z${fmt(z)} F${fmt(st.tool.plunge)}`);
+      circRings().forEach((r, i) => {
+        L.push(`G1 X${fmt(cx + r)} Y${fmt(cy)}${i ? '' : ` F${fmt(st.tool.feed)}`}`, `G3 X${fmt(cx + r)} Y${fmt(cy)} I${fmt(-r)} J0`);
+      });
+      L.push(`G1 X${fmt(cx)} Y${fmt(cy)}`);
+    }
+  },
+  rect(L) {
+    const { cx, cy, depth } = st.rect;
+    const loops = rectLoops();
+    if (!loops.length) return;
+    L.push(`G0 X${fmt(cx)} Y${fmt(cy - loops[0].hh)}`, 'G0 Z1');
+    for (const z of levels(depth, st.stepdown)) {
+      L.push(`(level Z${fmt(z)})`, `G1 X${fmt(cx)} Y${fmt(cy - loops[0].hh)}`, `G1 Z${fmt(z)} F${fmt(st.tool.plunge)}`);
+      loops.forEach(({ hw, hh, rc }, i) => {
+        const P = (x, y) => `X${fmt(x)} Y${fmt(y)}`;
+        L.push(`G1 ${P(cx, cy - hh)}${i ? '' : ` F${fmt(st.tool.feed)}`}`);
+        L.push(`G1 ${P(cx + hw - rc, cy - hh)}`);
+        if (rc) L.push(`G3 ${P(cx + hw, cy - hh + rc)} I0 J${fmt(rc)}`);
+        L.push(`G1 ${P(cx + hw, cy + hh - rc)}`);
+        if (rc) L.push(`G3 ${P(cx + hw - rc, cy + hh)} I${fmt(-rc)} J0`);
+        L.push(`G1 ${P(cx - hw + rc, cy + hh)}`);
+        if (rc) L.push(`G3 ${P(cx - hw, cy + hh - rc)} I0 J${fmt(-rc)}`);
+        L.push(`G1 ${P(cx - hw, cy - hh + rc)}`);
+        if (rc) L.push(`G3 ${P(cx - hw + rc, cy - hh)} I${fmt(rc)} J0`);
+        L.push(`G1 ${P(cx, cy - hh)}`);
+      });
+    }
+  },
+  bolt(L) {
+    // Grbl has no canned cycles, so pecks are expanded
+    const { depth, peck } = st.bolt;
+    boltHoles().forEach((h, i) => {
+      L.push(`(hole ${i + 1})`, `G0 X${fmt(h.x)} Y${fmt(h.y)}`, 'G0 Z1');
+      for (let cur = 0; cur > -depth + 1e-6;) {
+        const next = Math.max(cur - peck, -depth);
+        if (cur < 0) L.push(`G0 Z${fmt(cur + 0.5)}`);
+        L.push(`G1 Z${fmt(next)} F${fmt(st.tool.plunge)}`, 'G0 Z1');
+        cur = next;
+      }
+    });
+  },
+};
+
+function estimate(lines) {
+  const RAPID = 3000;
+  let p = { X: 0, Y: 0, Z: st.safeZ }, mode = 0, F = 0, t = 0, cut = 0;
+  for (const raw of lines) {
+    const l = raw.replace(/\(.*?\)/g, '');
+    const w = Object.fromEntries([...l.matchAll(/([GXYZIJF])(-?[\d.]+)/g)].map(m => [m[1], +m[2]]));
+    if ('G' in w && w.G <= 3) mode = w.G;
+    if ('F' in w) F = w.F;
+    if (!('X' in w || 'Y' in w || 'Z' in w)) continue;
+    const q = { X: w.X ?? p.X, Y: w.Y ?? p.Y, Z: w.Z ?? p.Z };
+    let d = Math.hypot(q.X - p.X, q.Y - p.Y, q.Z - p.Z);
+    if (mode >= 2) {
+      const c = [p.X + (w.I ?? 0), p.Y + (w.J ?? 0)], r = Math.hypot(w.I ?? 0, w.J ?? 0);
+      let sweep = Math.atan2(q.Y - c[1], q.X - c[0]) - Math.atan2(p.Y - c[1], p.X - c[0]);
+      if (mode === 2) sweep = -sweep;
+      sweep = ((sweep % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) || 2 * Math.PI;
+      d = r * sweep;
+    }
+    t += d / (mode === 0 ? RAPID : F || 1);
+    if (mode) cut += d;
+    p = q;
+  }
+  return { min: t, cut };
+}
+
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+function paint(lines) {
+  return lines.map(l => {
+    if (l.startsWith('(')) return `<span class="c">${esc(l)}</span>`;
+    if (/^G0\b/.test(l)) return `<span class="g0">${esc(l)}</span>`;
+    if (/^G[23]\b/.test(l)) return `<span class="arc">${esc(l)}</span>`;
+    return esc(l);
+  }).join('\n');
+}
+
+// ---------- render ----------
+let current = [];
+function render() {
+  const out = { plan: [], sec: [], tool: [], step: [] };
+  const pos = {};
+  drawPlan(out.plan, pos);
+  drawSec(out.sec, pos);
+  drawTool(out.tool, pos);
+  if (st.op !== 'bolt') drawStep(out.step, pos);
+  for (const [k, v] of Object.entries(VIEWS)) v.g.innerHTML = out[k].join('');
+  document.getElementById('f-step').hidden = st.op === 'bolt';
+  document.getElementById('sec-cap').textContent = st.op === 'bolt' ? 'Front view, holes projected, Z exaggerated'
+    : st.op === 'square' ? `Section through centre, setup ${st.sq.setup} in the vise, Z exaggerated`
+    : st.op === 'side' ? `Section across the ${st.side.side.toUpperCase().replace('-', '−')} side, Z exaggerated` : 'Section through centre, Z exaggerated';
+  const setupEl = document.getElementById('setup');
+  setupEl.hidden = st.op !== 'square';
+  for (const b of setupEl.querySelectorAll('button')) b.setAttribute('aria-pressed', String(+b.dataset.setup === st.sq.setup));
+  const sideEl = document.getElementById('sidepick');
+  sideEl.hidden = st.op !== 'side';
+  for (const b of sideEl.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.side === st.side.side));
+  document.getElementById('setup-note').textContent = st.sq.setup === 1
+    ? `Clamp the raw stock ${fmt(st.sq.stick)} mm above the jaws. Probe X0 Y0 on the raw front-left corner, Z0 on top.`
+    : `Flip the part and clamp on the finished sides, ${fmt(st.sq.stick)} mm above the jaws. Probe X0 Y0 on the finished front-left corner, Z0 on top.`;
+
+  const issues = check();
+  const state = new Map();
+  for (const i of issues) for (const f of i.f) if (state.get(f) !== 'error') state.set(f, i.lv);
+  for (const [p, el] of Object.entries(inputs)) {
+    const at = pos[p];
+    el.hidden = !at;
+    if (!at) continue;
+    const v = VIEWS[at.v];
+    if (el.parentNode !== v.ov) v.ov.append(el);
+    el.style.left = `${at.x / v.vb[0] * 100}%`;
+    el.style.top = `${at.y / v.vb[1] * 100}%`;
+    if (!el.querySelector('input').matches(':invalid')) el.dataset.state = state.get(p) || '';
+  }
+
+  const ul = document.getElementById('checks');
+  ul.innerHTML = issues.length
+    ? issues.map(i => `<li data-lv="${i.lv}">${esc(i.text)}</li>`).join('')
+    : '<li>Ready to cut.</li>';
+
+  const blocked = issues.some(i => i.lv === 'error');
+  const pre = document.getElementById('gcode'), stats = document.getElementById('stats');
+  document.getElementById('copy').disabled = document.getElementById('dl').disabled = blocked;
+  if (blocked) {
+    current = [];
+    pre.innerHTML = '<span class="c">(fix the errors on the left to generate code)</span>';
+    stats.textContent = '';
+    return;
+  }
+  current = [];
+  header(current);
+  GEN[st.op](current);
+  footer(current);
+  pre.innerHTML = paint(current);
+  const e = estimate(current);
+  const m = Math.floor(e.min), s = Math.round((e.min - m) * 60);
+  stats.innerHTML = `<b>${current.length}</b> lines, <b>${Math.round(e.cut)}</b> mm of feed moves, about <b>${m} min ${s} s</b> at the programmed feeds`;
+}
+
+// ---------- wiring ----------
+function selectOp(op) {
+  st.op = op;
+  for (const b of document.querySelectorAll('#ops button')) b.setAttribute('aria-pressed', String(b.dataset.op === op));
+  buildInputs();
+  render();
+}
+document.getElementById('ops').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (b) selectOp(b.dataset.op);
+});
+document.getElementById('setup').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  st.sq.setup = +b.dataset.setup;
+  render();
+});
+document.getElementById('sidepick').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  st.side.side = b.dataset.side;
+  render();
+});
+document.getElementById('copy').addEventListener('click', async e => {
+  await navigator.clipboard.writeText(current.join('\n') + '\n');
+  e.target.textContent = 'Copied';
+  setTimeout(() => { e.target.textContent = 'Copy'; }, 1200);
+});
+document.getElementById('dl').addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([current.join('\n') + '\n'], { type: 'text/plain' }));
+  a.download = `${st.op}.nc`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+selectOp(st.op);
+</script>
+</body>
+</html>
