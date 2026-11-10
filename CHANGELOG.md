@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.0] - 2026-11-10
+
+- **Load in CNCjs** sends the program to the open port through CNCjs's
+  `/api/gcode`, using the custom widget's session token. It replaces
+  **Download .nc** inside CNCjs, whose widget sandbox blocks downloads.
+- Loading is refused while CNCjs is running or paused, because loading stops
+  CNCjs's workflow; CNCjs's own Upload button follows the same rule.
+- A load result stays until the program changes, and a widget served from
+  another origin says why it cannot load.
+
 ## [0.1.0] - 2026-11-10
 
 - Conversational CNCjs widget with square up (two setups), face, side face,

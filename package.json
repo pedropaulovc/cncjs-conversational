@@ -1,6 +1,6 @@
 {
   "name": "cncjs-conversational",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Conversational programming CNCjs custom widget: face, side face, square up, pockets and bolt circles laid out as a dimensioned sketch.",
   "keywords": [
     "cncjs",
