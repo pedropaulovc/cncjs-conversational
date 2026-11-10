@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1] - 2026-11-10
+
+- A load outcome that arrives after an edit is still shown, marked as being
+  about the program before the edit, instead of disappearing.
+- If CNCjs answers `/api/controllers` with something other than a list (for
+  example a proxy's sign-in page), Load says so instead of showing a script error.
+
 ## [0.2.0] - 2026-11-10
 
 - **Load in CNCjs** sends the program to the open port through CNCjs's
