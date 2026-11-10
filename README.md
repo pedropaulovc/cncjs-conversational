@@ -21,10 +21,12 @@ In CNCjs, turn on **Custom Widget** under **Manage Widgets** and set its URL to
 mounts it for you.
 
 Open a port in CNCjs, then click **Load in CNCjs**: the program replaces the one
-loaded in CNCjs's workspace, ready for the Visualizer and **Run**. Inside CNCjs
-the widget uses CNCjs's session token and `/api/gcode`; CNCjs's widget sandbox
-blocks file downloads, so **Download .nc** only appears when the page is opened
-on its own (for example `web/index.html` in a browser).
+loaded in CNCjs's workspace, ready for the Visualizer and **Run**. Loading is
+refused while a program is running or paused, since it would stop the job.
+Inside CNCjs the widget uses CNCjs's session token and `/api/gcode`, so it must
+be served by CNCjs (`--mount`) rather than from another address. CNCjs's widget
+sandbox blocks file downloads, so **Download .nc** only appears when the page is
+opened on its own (for example `web/index.html` in a browser).
 
 ## Checks
 

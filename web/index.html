@@ -1013,12 +1013,11 @@ function render() {
   const blocked = issues.some(i => i.lv === 'error');
   const pre = document.getElementById('gcode'), stats = document.getElementById('stats');
   document.getElementById('copy').disabled = document.getElementById('dl').disabled = blocked;
-  if (cnc.phase !== 'loading') cnc.phase = 'idle';
-  updateLoad(blocked);
   if (blocked) {
     current = [];
     pre.innerHTML = '<span class="c">(fix the errors on the left to generate code)</span>';
     stats.textContent = '';
+    updateLoad();
     return;
   }
   current = [];
@@ -1029,6 +1028,7 @@ function render() {
   const e = estimate(current);
   const m = Math.floor(e.min), s = Math.round((e.min - m) * 60);
   stats.innerHTML = `<b>${current.length}</b> lines, <b>${Math.round(e.cut)}</b> mm of feed moves, about <b>${m} min ${s} s</b> at the programmed feeds`;
+  updateLoad();
 }
 
 // ---------- wiring ----------
@@ -1068,45 +1068,63 @@ document.getElementById('dl').addEventListener('click', () => {
 });
 
 // ---------- CNCjs custom widget ----------
-// CNCjs puts its session token on the iframe URL and answers a `connect` message
-// with { action: { type: 'change', payload: { port, controller } } }. Its iframe
-// sandbox has no allow-downloads, so embedded output goes through /api/gcode.
-const cnc = { token: new URLSearchParams(location.search).get('token'), port: null, phase: 'idle' };
-const embedded = window.parent !== window && Boolean(cnc.token);
+// CNCjs puts its session token on the iframe URL, answers a `connect` message with
+// { action: { type: 'change', payload: { port, controller } } }, and sizes the
+// iframe from its body itself. Its sandbox has no allow-downloads, so inside
+// CNCjs the program goes through /api/gcode instead of a file.
+const token = new URLSearchParams(location.search).get('token');
+const sameOriginParent = () => { try { return window.parent.location.origin === location.origin; } catch { return false; } };
+// standalone: own tab or file; cncjs: served and framed by CNCjs; foreign: framed by CNCjs from another origin
+const embedding = window.parent === window || !token ? 'standalone' : sameOriginParent() ? 'cncjs' : 'foreign';
+// load.state: idle | loading | loaded | refused | failed; `program` is the text the message is about
+const cnc = { token, port: null, load: { state: 'idle', message: '', program: '' } };
 const programName = () => `${st.op}${st.op === 'square' ? `-setup${st.sq.setup}` : st.op === 'side' ? `-${st.side.side}` : ''}.nc`;
-const toParent = (type, payload) => window.parent.postMessage({ token: cnc.token, action: { type, payload } }, location.origin);
+const programText = () => current.length ? current.join('\n') + '\n' : '';
+const setLoad = (state, message = '', program = '') => { cnc.load = { state, message, program }; updateLoad(); };
 
-function updateLoad(blocked = !current.length) {
+function updateLoad() {
   const load = document.getElementById('load'), note = document.getElementById('cnc-note');
-  load.hidden = note.hidden = !embedded;
-  document.getElementById('dl').hidden = embedded;
-  if (!embedded) return;
-  load.disabled = blocked || !cnc.port || cnc.phase === 'loading';
-  if (cnc.phase === 'loading') return;
-  note.textContent = cnc.phase !== 'idle' ? cnc.phase : cnc.port ? `Port ${cnc.port}: loading replaces the current CNCjs program.` : 'Open a port in CNCjs to load this program.';
+  load.hidden = note.hidden = embedding === 'standalone';
+  document.getElementById('dl').hidden = embedding !== 'standalone';
+  if (embedding === 'standalone') return;
+  if (embedding === 'foreign') {
+    load.disabled = true;
+    note.textContent = 'Loading into CNCjs needs the widget served by CNCjs itself (same address and port).';
+    return;
+  }
+  const { load: L } = cnc;
+  // A result describes one program; editing it makes the result stale.
+  if (L.state !== 'idle' && L.state !== 'loading' && L.program !== programText()) cnc.load = { state: 'idle', message: '', program: '' };
+  load.disabled = !current.length || !cnc.port || cnc.load.state === 'loading';
+  note.textContent = cnc.load.state !== 'idle' ? cnc.load.message
+    : cnc.port ? `Port ${cnc.port}: loading replaces the program loaded in CNCjs.` : 'Open a port in CNCjs to load this program.';
+}
+
+async function cncjsApi(path, init = {}) {
+  const res = await fetch(path, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cnc.token}` } });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.msg || `HTTP ${res.status}`);
+  return body;
 }
 
 async function loadIntoCncjs() {
-  const note = document.getElementById('cnc-note');
-  const name = programName();
-  cnc.phase = 'loading';
-  note.textContent = `Loading ${name}…`;
-  updateLoad();
+  // Snapshot what is being sent; the port and the editor may change while waiting.
+  const port = cnc.port, name = programName(), program = programText();
+  setLoad('loading', `Loading ${name}…`, program);
   try {
-    const res = await fetch('/api/gcode', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cnc.token}` },
-      body: JSON.stringify({ port: cnc.port, name, gcode: current.join('\n') + '\n' }),
-    });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).msg || `HTTP ${res.status}`);
-    cnc.phase = `Loaded ${name} into CNCjs on ${cnc.port}.`;
+    // gcode:load stops CNCjs's workflow, so only load when nothing is running or paused,
+    // the same rule CNCjs's own Upload button follows.
+    const workflow = (await cncjsApi('/api/controllers')).find(c => c.port === port)?.workflow?.state;
+    if (!workflow) return setLoad('failed', `Not loaded: ${port} is not open in CNCjs.`, program);
+    if (workflow !== 'idle') return setLoad('refused', `Not loaded: a program is ${workflow} on ${port}. Stop it in CNCjs first.`, program);
+    await cncjsApi('/api/gcode', { method: 'POST', body: JSON.stringify({ port, name, gcode: program }) });
+    setLoad('loaded', `Loaded ${name} into CNCjs on ${port}.`, program);
   } catch (error) {
-    cnc.phase = `Not loaded: ${error.message}`;
+    setLoad('failed', `Not loaded: ${error.message}`, program);
   }
-  updateLoad();
 }
 
-if (embedded) {
+if (embedding === 'cncjs') {
   window.addEventListener('message', e => {
     if (e.source !== window.parent || e.origin !== location.origin) return;
     const msg = e.data || {};
@@ -1114,13 +1132,11 @@ if (embedded) {
     const a = msg.action || {};
     if (a.type !== 'change' || !a.payload || !Object.hasOwn(a.payload, 'port')) return;
     cnc.port = a.payload.port || null;
-    cnc.phase = 'idle';
+    if (cnc.load.state !== 'loading') cnc.load = { state: 'idle', message: '', program: '' };
     updateLoad();
   });
   document.getElementById('load').addEventListener('click', loadIntoCncjs);
-  // Let CNCjs size the widget to its content.
-  new ResizeObserver(() => toParent('resize', { scrollHeight: document.documentElement.scrollHeight })).observe(document.body);
-  toParent('connect');
+  window.parent.postMessage({ token: cnc.token, action: { type: 'connect' } }, location.origin);
 }
 selectOp(st.op);
 </script>
