@@ -188,8 +188,10 @@ pre .arc { color: var(--path); }
         <h2>G-code</h2>
         <button class="btn" id="copy">Copy</button>
         <button class="btn primary" id="dl">Download .nc</button>
+        <button class="btn primary" id="load" hidden>Load in CNCjs</button>
       </div>
       <p class="stats" id="stats"></p>
+      <p class="stats" id="cnc-note" aria-live="polite" hidden></p>
       <pre id="gcode" aria-label="Generated G-code"></pre>
     </section>
   </aside>
@@ -1011,6 +1013,8 @@ function render() {
   const blocked = issues.some(i => i.lv === 'error');
   const pre = document.getElementById('gcode'), stats = document.getElementById('stats');
   document.getElementById('copy').disabled = document.getElementById('dl').disabled = blocked;
+  if (cnc.phase !== 'loading') cnc.phase = 'idle';
+  updateLoad(blocked);
   if (blocked) {
     current = [];
     pre.innerHTML = '<span class="c">(fix the errors on the left to generate code)</span>';
@@ -1058,10 +1062,66 @@ document.getElementById('copy').addEventListener('click', async e => {
 document.getElementById('dl').addEventListener('click', () => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([current.join('\n') + '\n'], { type: 'text/plain' }));
-  a.download = `${st.op}.nc`;
+  a.download = programName();
   a.click();
   URL.revokeObjectURL(a.href);
 });
+
+// ---------- CNCjs custom widget ----------
+// CNCjs puts its session token on the iframe URL and answers a `connect` message
+// with { action: { type: 'change', payload: { port, controller } } }. Its iframe
+// sandbox has no allow-downloads, so embedded output goes through /api/gcode.
+const cnc = { token: new URLSearchParams(location.search).get('token'), port: null, phase: 'idle' };
+const embedded = window.parent !== window && Boolean(cnc.token);
+const programName = () => `${st.op}${st.op === 'square' ? `-setup${st.sq.setup}` : st.op === 'side' ? `-${st.side.side}` : ''}.nc`;
+const toParent = (type, payload) => window.parent.postMessage({ token: cnc.token, action: { type, payload } }, location.origin);
+
+function updateLoad(blocked = !current.length) {
+  const load = document.getElementById('load'), note = document.getElementById('cnc-note');
+  load.hidden = note.hidden = !embedded;
+  document.getElementById('dl').hidden = embedded;
+  if (!embedded) return;
+  load.disabled = blocked || !cnc.port || cnc.phase === 'loading';
+  if (cnc.phase === 'loading') return;
+  note.textContent = cnc.phase !== 'idle' ? cnc.phase : cnc.port ? `Port ${cnc.port}: loading replaces the current CNCjs program.` : 'Open a port in CNCjs to load this program.';
+}
+
+async function loadIntoCncjs() {
+  const note = document.getElementById('cnc-note');
+  const name = programName();
+  cnc.phase = 'loading';
+  note.textContent = `Loading ${name}…`;
+  updateLoad();
+  try {
+    const res = await fetch('/api/gcode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cnc.token}` },
+      body: JSON.stringify({ port: cnc.port, name, gcode: current.join('\n') + '\n' }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).msg || `HTTP ${res.status}`);
+    cnc.phase = `Loaded ${name} into CNCjs on ${cnc.port}.`;
+  } catch (error) {
+    cnc.phase = `Not loaded: ${error.message}`;
+  }
+  updateLoad();
+}
+
+if (embedded) {
+  window.addEventListener('message', e => {
+    if (e.source !== window.parent || e.origin !== location.origin) return;
+    const msg = e.data || {};
+    if (typeof msg.token === 'string' && msg.token) cnc.token = msg.token;
+    const a = msg.action || {};
+    if (a.type !== 'change' || !a.payload || !Object.hasOwn(a.payload, 'port')) return;
+    cnc.port = a.payload.port || null;
+    cnc.phase = 'idle';
+    updateLoad();
+  });
+  document.getElementById('load').addEventListener('click', loadIntoCncjs);
+  // Let CNCjs size the widget to its content.
+  new ResizeObserver(() => toParent('resize', { scrollHeight: document.documentElement.scrollHeight })).observe(document.body);
+  toParent('connect');
+}
 selectOp(st.op);
 </script>
 </body>

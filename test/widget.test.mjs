@@ -1,5 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
@@ -49,4 +50,46 @@ test('side face refuses a cut deeper than the stock', async () => {
   await page.getByRole('spinbutton', { name: 'Side depth below Z0' }).fill('25');
   assert.match(await page.locator('#checks').innerText(), /deeper than the stock/);
   assert.equal(await page.locator('#dl').isDisabled(), true);
+});
+
+test('embedded in a CNCjs custom widget, Load sends the program to /api/gcode', async () => {
+  // Mimic CNCjs 1.11.5: same-origin parent, token on the iframe URL, its default
+  // sandbox (no allow-downloads), and a `change` reply to the widget's `connect`.
+  const html = await readFile(new URL('../web/index.html', import.meta.url), 'utf8');
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+  const host = await ctx.newPage();
+  const uploads = [], parentMessages = [];
+  await host.exposeFunction('recordMessage', m => parentMessages.push(m));
+  await ctx.route('http://cncjs.test/**', async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/conversational/') return route.fulfill({ contentType: 'text/html', body: html });
+    if (url.pathname === '/api/gcode') {
+      uploads.push({ auth: route.request().headers().authorization, body: route.request().postDataJSON() });
+      return route.fulfill({ contentType: 'application/json', body: '{}' });
+    }
+    return route.fulfill({ contentType: 'text/html', body: `<!doctype html><body><iframe name="w"
+      sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
+      style="width:1400px;height:1000px" src="/conversational/?token=tok123"></iframe><script>
+      addEventListener('message', e => {
+        recordMessage(e.data);
+        if (e.data?.token === 'tok123' && e.data.action?.type === 'connect')
+          e.source.postMessage({ token: 'tok123', action: { type: 'change', payload: { port: 'COM7', controller: 'Grbl' } } }, '*');
+      });</script>` });
+  });
+  try {
+    await host.goto('http://cncjs.test/');
+    const w = host.frameLocator('iframe[name="w"]');
+    await w.getByRole('button', { name: 'Circular pocket', exact: true }).click();
+    assert.equal(await w.locator('#dl').isHidden(), true);
+    await w.getByRole('button', { name: 'Load in CNCjs' }).click();
+    await w.getByText('Loaded circ.nc into CNCjs on COM7.').waitFor();
+    assert.equal(uploads.length, 1);
+    assert.equal(uploads[0].auth, 'Bearer tok123');
+    assert.equal(uploads[0].body.port, 'COM7');
+    assert.equal(uploads[0].body.name, 'circ.nc');
+    assert.match(uploads[0].body.gcode, /^\(Circular pocket[\s\S]*\nM30\n$/);
+    assert.ok(parentMessages.some(m => m.action?.type === 'resize' && m.action.payload.scrollHeight > 0));
+  } finally {
+    await ctx.close();
+  }
 });

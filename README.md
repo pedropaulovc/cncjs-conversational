@@ -20,9 +20,11 @@ In CNCjs, turn on **Custom Widget** under **Manage Widgets** and set its URL to
 `/conversational/`. [cncjs-whb04b6-el400-integration](https://github.com/pedropaulovc/cncjs-whb04b6-el400-integration)
 mounts it for you.
 
-The widget does not send programs to CNCjs yet: use **Download .nc** and load
-the file with CNCjs's **Upload G-code**. The page also works on its own; open
-`web/index.html` in a browser.
+Open a port in CNCjs, then click **Load in CNCjs**: the program replaces the one
+loaded in CNCjs's workspace, ready for the Visualizer and **Run**. Inside CNCjs
+the widget uses CNCjs's session token and `/api/gcode`; CNCjs's widget sandbox
+blocks file downloads, so **Download .nc** only appears when the page is opened
+on its own (for example `web/index.html` in a browser).
 
 ## Checks
 
