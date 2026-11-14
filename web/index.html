@@ -206,7 +206,7 @@ pre .arc { color: var(--path); }
 // the dimension inputs keep their size inside CNCjs.
 const VIEWS = {
   plan: { vb: [320, 250] },
-  sec:  { vb: [320, 180] },
+  sec:  { vb: [320, 230] },
   tool: { vb: [320, 172] },
   step: { vb: [320, 110] },
 };
@@ -353,7 +353,8 @@ function planFrame() {
 const ZT = 56;
 function secFrame(span, L = 78, R = 62) {
   const s = (VIEWS.sec.vb[0] - L - R) / span;
-  return { s, ox: L, X: x => L + x * s, zs: T => Math.min(96 / T, s * 4) };
+  // Z drawn up to 140 px for the stock, up to 10x the X scale, so shallow cuts read clearly
+  return { s, ox: L, X: x => L + x * s, zs: T => Math.min(140 / T, s * 10) };
 }
 
 // ---------- toolpath geometry (mm), shared by sketch and G-code ----------
