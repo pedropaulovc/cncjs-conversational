@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+- One column at the width of CNCjs's sidebars (340 px) instead of three, with
+  the sketches redrawn 1:1 for that width so their text and number boxes stay
+  readable. The plan's height follows the stock's shape.
+- Served by CNCjs, the widget uses CNCjs's own stylesheet: Bootstrap buttons,
+  toggles and alerts like the other widgets. A stand-in covers standalone use.
+
 ## [0.2.2] - 2026-11-10
 
 - A reply that is not JSON from CNCjs (for example a proxy's sign-in page) now
