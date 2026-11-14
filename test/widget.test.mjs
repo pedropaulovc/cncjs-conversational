@@ -52,14 +52,46 @@ test('side face refuses a cut deeper than the stock', async () => {
   assert.equal(await page.locator('#dl').isDisabled(), true);
 });
 
-// Mimic CNCjs 1.11.5: same-origin parent, token on the iframe URL, its default
-// sandbox (no allow-downloads), and a `change` reply to the widget's `connect`.
-// `controllers` and `gcode` return those endpoints' bodies (a string is sent as HTML);
-// `gate` lets a test hold the controllers reply; `widgetOrigin` serves the widget elsewhere.
+// Every state of every operation, as the sidebar column shows it: no dimension box may cover
+// another or hang outside its sketch, and nothing may scroll sideways.
+test('at CNCjs sidebar width, dimension boxes stay apart and inside their sketches', async () => {
+  const states = [
+    ['Square up stock', '1: face top, cut sides'], ['Square up stock', '2: flip, face to thickness'],
+    ['Face'], ['Side face', 'Front (Y−)'], ['Side face', 'Back (Y+)'], ['Side face', 'Left (X−)'], ['Side face', 'Right (X+)'],
+    ['Rectangular pocket'], ['Circular pocket'], ['Bolt circle'],
+  ];
+  for (const [op, variant] of states) {
+    await page.getByRole('button', { name: op, exact: true }).click();
+    if (variant) await page.getByRole('button', { name: variant }).click();
+    const problems = await page.evaluate(() => {
+      const out = [];
+      const doc = document.documentElement;
+      if (doc.scrollWidth > doc.clientWidth) out.push(`page scrolls sideways (${doc.scrollWidth} > ${doc.clientWidth})`);
+      const boxes = [...document.querySelectorAll('.fld:not([hidden])')].map(el => ({
+        name: el.querySelector('input').getAttribute('aria-label'), r: el.getBoundingClientRect(), v: el.closest('.view').getBoundingClientRect(),
+      }));
+      for (const { name, r, v } of boxes) {
+        if (r.left < v.left - 0.5 || r.right > v.right + 0.5 || r.top < v.top - 0.5 || r.bottom > v.bottom + 0.5) out.push(`${name} leaves its sketch`);
+      }
+      boxes.forEach((a, i) => boxes.slice(i + 1).forEach(b => {
+        if (a.r.left < b.r.right && b.r.left < a.r.right && a.r.top < b.r.bottom && b.r.top < a.r.bottom) out.push(`${a.name} covers ${b.name}`);
+      }));
+      return out;
+    });
+    assert.deepEqual(problems, [], [op, variant].filter(Boolean).join(' / '));
+  }
+});
+
+// Mimic CNCjs 1.11.5: same-origin parent with its stylesheet, a sidebar-wide iframe with the
+// token on its URL, its default sandbox (no allow-downloads), and a `change` reply to the
+// widget's `connect`. `controllers` and `gcode` return those endpoints' bodies (a string is
+// sent as HTML); `gate` lets a test hold the controllers reply; `widgetOrigin` serves the widget elsewhere.
 const idle = () => [{ port: 'COM7', workflow: { state: 'idle' } }];
 const reply = (route, body) => typeof body === 'string'
   ? route.fulfill({ contentType: 'text/html', body })
   : route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+// Stands in for CNCjs's main.css: its page minimum width and a recognisable Bootstrap colour.
+const CNCJS_CSS = 'body{min-width:960px}.btn-primary{background-color:rgb(1, 2, 3)}';
 async function embedInCncjs({ controllers = idle, gcode = () => ({}), gate = async () => {}, widgetOrigin = 'http://cncjs.test' } = {}) {
   const html = await readFile(new URL('../web/index.html', import.meta.url), 'utf8');
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
@@ -68,6 +100,7 @@ async function embedInCncjs({ controllers = idle, gcode = () => ({}), gate = asy
   await ctx.route(/^http:\/\/(cncjs|widget)\.test\//, async route => {
     const url = new URL(route.request().url());
     if (url.pathname === '/conversational/') return route.fulfill({ contentType: 'text/html', body: html });
+    if (url.pathname === '/main.css') return route.fulfill({ contentType: 'text/css', body: CNCJS_CSS });
     if (url.pathname === '/api/controllers') {
       await gate();
       return reply(route, controllers());
@@ -76,9 +109,9 @@ async function embedInCncjs({ controllers = idle, gcode = () => ({}), gate = asy
       uploads.push({ auth: route.request().headers().authorization, body: route.request().postDataJSON() });
       return reply(route, gcode());
     }
-    return route.fulfill({ contentType: 'text/html', body: `<!doctype html><body><iframe name="w"
+    return route.fulfill({ contentType: 'text/html', body: `<!doctype html><head><link rel="stylesheet" href="/main.css"></head><body><iframe name="w"
       sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
-      style="width:1400px;height:1000px" src="${widgetOrigin}/conversational/?token=tok123"></iframe><script>
+      style="width:338px;height:1000px" src="${widgetOrigin}/conversational/?token=tok123"></iframe><script>
       addEventListener('message', e => {
         if (e.data?.token === 'tok123' && e.data.action?.type === 'connect')
           e.source.postMessage({ token: 'tok123', action: { type: 'change', payload: { port: 'COM7', controller: 'Grbl' } } }, '*');
@@ -107,6 +140,18 @@ test('embedded in CNCjs, Load sends the program to /api/gcode', async () => {
     await w.getByText('Loaded circ.nc into CNCjs on COM7.').waitFor();
     await diameter.fill('30');
     await w.getByText('Port COM7: loading replaces the program loaded in CNCjs.').waitFor();
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('embedded in CNCjs, the widget wears CNCjs stylesheet and fits the sidebar', async () => {
+  const { ctx, w } = await embedInCncjs();
+  try {
+    const load = w.getByRole('button', { name: 'Load in CNCjs' });
+    await w.locator('#cncjs-fallback').waitFor({ state: 'detached' });
+    assert.equal(await load.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(1, 2, 3)');
+    assert.equal(await load.evaluate(el => el.ownerDocument.documentElement.scrollWidth <= el.ownerDocument.documentElement.clientWidth), true);
   } finally {
     await ctx.close();
   }

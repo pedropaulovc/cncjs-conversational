@@ -4,67 +4,91 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Conversational programming</title>
+<!-- Stands in for CNCjs's stylesheet (Bootstrap 3.3.7) when the page is opened on its own.
+     Served by CNCjs, the widget links CNCjs's own stylesheet and drops this one. -->
+<style id="cncjs-fallback">
+body { margin: 0; font: 13px/1.42857 Arial, "Helvetica Neue", Helvetica, sans-serif; color: #222; background: #fff; }
+.btn { display: inline-block; margin: 0; padding: 6px 12px; font: inherit; font-size: 13px; line-height: 1.42857; text-align: center; white-space: nowrap; vertical-align: middle; cursor: pointer; user-select: none; border: 1px solid transparent; border-radius: 4px; }
+.btn-sm { padding: 5px 10px; font-size: 12px; line-height: 1.5; border-radius: 3px; }
+.btn-default { color: #333; background: #fff; border-color: #ccc; }
+.btn-default:hover { background: #e6e6e6; border-color: #adadad; }
+.btn-default.active { background: #e6e6e6; border-color: #adadad; box-shadow: inset 0 3px 5px rgba(0, 0, 0, .125); }
+.btn-primary { color: #fff; background: #337ab7; border-color: #2e6da4; }
+.btn-primary:hover { background: #286090; border-color: #204d74; }
+.btn:disabled { cursor: not-allowed; opacity: .65; box-shadow: none; }
+.btn-group { position: relative; display: inline-block; vertical-align: middle; }
+.btn-group > .btn { position: relative; float: left; }
+.btn-group > .btn + .btn { margin-left: -1px; }
+.btn-group > .btn:hover, .btn-group > .btn.active { z-index: 2; }
+.btn-group > .btn:not(:first-child):not(:last-child) { border-radius: 0; }
+.btn-group > .btn:first-child:not(:last-child) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.btn-group > .btn:last-child:not(:first-child) { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.alert { padding: 15px; border: 1px solid transparent; border-radius: 4px; }
+.alert-success { color: #3c763d; background: #dff0d8; border-color: #d6e9c6; }
+.alert-warning { color: #8a6d3b; background: #fcf8e3; border-color: #faebcc; }
+.alert-danger { color: #a94442; background: #f2dede; border-color: #ebccd1; }
+.text-muted { color: #777; }
+pre { display: block; padding: 9.5px; font: 12px/1.42857 Menlo, Monaco, Consolas, "Courier New", monospace; color: #333; background: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; }
+</style>
 <style>
-/* Hallmark · v2.0.0 · fast · scope: app · theme: custom (drafting sheet) · signature: every parameter is the dimension text of the sketch it changes */
-/* critique: one sheet of paper, ink geometry, blue dimension work, orange only ever means toolpath; inputs live where a draftsman would write the number */
+/* Hallmark · v2.1.0 · fast · scope: app · theme: CNCjs sidebar (Bootstrap 3 from CNCjs's own stylesheet) · signature: every parameter is the dimension text of the sketch it changes */
+/* critique: one 340 px column like CNCjs's own widgets; ink geometry, blue dimension work, orange only ever means toolpath; inputs live where a draftsman would write the number */
 :root {
-  --paper: #ece8df;
-  --sheet: #faf8f3;
-  --field: #ffffff;
-  --ink: #1d2126;
-  --ink-2: #5a6068;
-  --rule: #d3cdbf;
-  --hatch: #a7a294;
-  --dim: #1f56a8;
-  --dim-soft: #1f56a826;
+  --bg: #fff;
+  --field: #fff;
+  --ink: #222;
+  --ink-2: #777;
+  --rule: #ccc;
+  --hatch: #b8b8b8;
+  --dim: #337ab7;
   --path: #cf5a1c;
   --path-soft: #cf5a1c2e;
-  --error: #b3261e;
-  --error-soft: #b3261e14;
-  --warn: #8a5a00;
-  --warn-soft: #8a5a0014;
-  --ok: #2c6b3c;
-  --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
-  --font-num: "IBM Plex Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
-  --r: 6px;
+  --error: #a94442;
+  --error-soft: #f2dede;
+  --warn: #8a6d3b;
+  --font-num: Menlo, Monaco, Consolas, "Courier New", monospace;
 }
 * { box-sizing: border-box; }
+/* Bootstrap's .btn display outranks the hidden attribute */
+[hidden] { display: none !important; }
 html, body { overflow-x: clip; }
-body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.45 var(--font-ui); }
-.app { max-width: 1440px; margin: 0 auto; padding: 16px 20px 28px; display: grid; grid-template-columns: 196px minmax(0, 1fr) 360px; gap: 18px; }
-header { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 16px; }
-header h1 { margin: 0; font-size: 20px; font-weight: 600; }
-header p { margin: 0; color: var(--ink-2); font-size: 14px; }
-h2 { margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+/* CNCjs's stylesheet gives its own page a 960 px minimum width */
+body { min-width: 0; }
+/* 340 px is a CNCjs sidebar (360 px less its padding); the sketches are drawn 1:1 at that width */
+.app { max-width: 340px; margin: 0 auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+html[data-embedding="standalone"] body { background: #f6f7f8; }
+html[data-embedding="standalone"] .app { margin: 16px auto; background: var(--bg); border: 1px solid var(--rule); }
+header h1 { margin: 0; font-size: 13px; font-weight: bold; line-height: 1.4; }
+header p { margin: 0; font-size: 12px; }
+h2 { margin: 0; font-size: 13px; font-weight: bold; line-height: 1.4; }
 
-/* operation rail */
-.ops { display: flex; flex-direction: column; gap: 4px; }
-.ops button { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid transparent; border-radius: var(--r); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: background-color .12s, border-color .12s; }
-.ops button svg { width: 26px; height: 26px; flex: none; color: var(--ink-2); }
-.ops button:hover { background: var(--sheet); }
-.ops button[aria-pressed="true"] { background: var(--sheet); border-color: var(--rule); font-weight: 600; }
-.ops button[aria-pressed="true"] svg { color: var(--path); }
-.checks { margin: 22px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
-.checks li { padding: 7px 9px; border-radius: var(--r); border-left: 3px solid var(--ok); background: var(--sheet); }
-.checks li[data-lv="warn"] { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
-.checks li[data-lv="error"] { border-color: var(--error); background: var(--error-soft); color: var(--error); }
+/* operations: 3 x 2 like CNCjs's jog pad */
+.ops { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.ops .btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 2px; white-space: normal; line-height: 1.2; }
+.ops .btn svg { width: 22px; height: 22px; flex: none; color: var(--ink-2); }
+.ops .btn.active svg { color: var(--path); }
+.btn-group.seg { display: flex; width: 100%; }
+.seg > .btn { flex: 1 1 0; min-width: 0; padding-left: 4px; padding-right: 4px; white-space: normal; }
+.setup[hidden] { display: none; }
+.setup p { margin: 4px 0 0; font-size: 12px; color: var(--ink-2); }
+.checks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.checks .alert { margin: 0; padding: 5px 8px; font-size: 12px; }
 
-/* the sheet */
-.sheet { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); padding: 14px 16px 16px; min-width: 0; }
+/* sketches */
+figure { margin: 0; }
+figure + figure { margin-top: 8px; border-top: 1px dashed var(--rule); padding-top: 6px; }
+figcaption { font-size: 12px; color: var(--ink-2); }
 .view { position: relative; width: 100%; }
 .view svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.view figcaption, .cap { font-size: 13px; color: var(--ink-2); }
-figure { margin: 0; }
-figure + figure { margin-top: 6px; border-top: 1px dashed var(--rule); padding-top: 10px; }
 .overlay { position: absolute; inset: 0; pointer-events: none; }
 
 /* dimension text = input */
-.fld { position: absolute; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 3px; padding: 1px 3px; border-radius: 4px; background: var(--sheet); color: var(--dim); font: 13px/1 var(--font-num); white-space: nowrap; pointer-events: auto; }
-.fld input { width: 6.2ch; padding: 3px 4px; border: 1px solid var(--rule); border-radius: 3px; background: var(--field); color: var(--ink); font: inherit; text-align: right; -moz-appearance: textfield; appearance: textfield; transition: border-color .12s; }
+.fld { position: absolute; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 2px; margin: 0; padding: 1px 2px; border-radius: 3px; background: var(--bg); color: var(--dim); font: 11px/1 Arial, "Helvetica Neue", Helvetica, sans-serif; font-weight: normal; white-space: nowrap; pointer-events: auto; }
+.fld input { width: calc(5ch + 8px); height: 20px; margin: 0; padding: 1px 3px; border: 1px solid var(--rule); border-radius: 3px; background: var(--field); color: var(--ink); font: 12px/1 var(--font-num); text-align: right; -moz-appearance: textfield; appearance: textfield; transition: border-color .12s, box-shadow .12s; }
 .fld input::-webkit-outer-spin-button, .fld input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .fld input:hover { border-color: var(--dim); }
-.fld input:focus-visible { outline: 2px solid var(--dim); outline-offset: 1px; border-color: var(--dim); }
-.fld .u { color: var(--ink-2); font-size: 12px; }
+.fld input:focus { outline: 0; border-color: #66afe9; box-shadow: 0 0 0 2px rgba(102, 175, 233, .45); }
+.fld .u { color: var(--ink-2); }
 .fld[data-state="warn"] input { border-color: var(--warn); color: var(--warn); }
 .fld[data-state="error"] input { border-color: var(--error); color: var(--error); background: var(--error-soft); }
 .fld[hidden] { display: none; }
@@ -72,18 +96,17 @@ figure + figure { margin-top: 6px; border-top: 1px dashed var(--rule); padding-t
 /* svg drafting */
 .stock { fill: var(--field); stroke: var(--ink); stroke-width: 1.4; }
 .sect { fill: url(#hatch); stroke: var(--ink); stroke-width: 1.4; }
-.void { fill: var(--sheet); stroke: none; }
-.jaw { fill: var(--rule); stroke: var(--ink-2); stroke-width: 1; }
+.void { fill: var(--bg); stroke: none; }
+.jaw { fill: #e6e6e6; stroke: var(--ink-2); stroke-width: 1; }
 .allow { fill: url(#hatch); fill-rule: evenodd; stroke: none; opacity: .8; }
 .fin { fill: var(--field); stroke: var(--ink); stroke-width: 2; }
 .raw { fill: none; stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 6 4; }
 .tp-faint { fill: none; stroke: var(--path); stroke-width: 1; opacity: .35; }
-.dimtxt { fill: var(--dim); font: 12px var(--font-num); }
+.dimtxt { fill: var(--dim); font: 11px var(--font-num); }
 .edge { fill: none; stroke: var(--ink); stroke-width: 1.4; }
-.hidden-l { fill: none; stroke: var(--ink); stroke-width: 1; stroke-dasharray: 4 3; }
-.feat { fill: var(--sheet); stroke: var(--ink); stroke-width: 1.6; }
+.feat { fill: var(--bg); stroke: var(--ink); stroke-width: 1.6; }
 .hatch { stroke: var(--hatch); stroke-width: 1; }
-.tp { fill: none; stroke: var(--path); stroke-width: 1.2; }
+.tp { fill: none; stroke: var(--path); stroke-width: 1.1; }
 .tp-rapid { fill: none; stroke: var(--path); stroke-width: 1; stroke-dasharray: 2 4; opacity: .8; }
 .toolmark { fill: var(--path-soft); stroke: var(--path); stroke-width: 1.2; }
 .layer { stroke: var(--path); stroke-width: 1; stroke-dasharray: 5 3; opacity: .7; }
@@ -93,77 +116,59 @@ figure + figure { margin-top: 6px; border-top: 1px dashed var(--rule); padding-t
 .ah { fill: var(--dim); }
 .ahp { fill: var(--path); }
 .safe { stroke: var(--dim); stroke-width: 1; stroke-dasharray: 6 4; }
-.lbl { fill: var(--ink-2); font: 12px var(--font-ui); }
+.lbl { fill: var(--ink-2); font: 11px Arial, "Helvetica Neue", Helvetica, sans-serif; }
 .dg.on .dl, .dg.on .ext { stroke: var(--dim); stroke-width: 2.2; opacity: 1; }
 .dg.on .feat, .dg.on .edge { stroke: var(--dim); }
 
-/* right column */
-.side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.toolrow { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
-#f-step { display: grid; grid-template-columns: 200px minmax(0, 1fr); align-items: center; gap: 12px; }
-#f-step[hidden] { display: none; }
-.code { display: flex; flex-direction: column; min-height: 0; }
-.code-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.code-head h2 { margin: 0; margin-right: auto; }
-.stats { font-size: 13px; color: var(--ink-2); margin: 0 0 8px; }
-.stats b { color: var(--ink); font-weight: 600; }
-pre { margin: 0; height: 400px; overflow: auto; padding: 10px 12px; background: var(--field); border: 1px solid var(--rule); border-radius: var(--r); font: 12.5px/1.5 var(--font-num); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* program */
+.code { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--rule); padding-top: 8px; }
+.code-head { display: flex; align-items: center; gap: 6px; }
+.code-head h2 { margin-right: auto; }
+.stats { margin: 0; font-size: 12px; color: var(--ink-2); }
+.stats b { color: var(--ink); }
+.code pre { height: 240px; margin: 0; overflow: auto; padding: 6px 8px; font-size: 11.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
 pre .c { color: var(--ink-2); }
 pre .g0 { color: var(--dim); }
 pre .arc { color: var(--path); }
-.btn { padding: 6px 12px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--field); color: var(--ink); font: 14px var(--font-ui); cursor: pointer; transition: border-color .12s, background-color .12s; }
-.btn:hover { border-color: var(--ink-2); }
-.btn:active { background: var(--paper); }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
-.btn:focus-visible, .ops button:focus-visible { outline: 2px solid var(--dim); outline-offset: 2px; }
-.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--sheet); }
-.setup { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; padding-bottom: 12px; border-bottom: 1px dashed var(--rule); }
-.setup[hidden] { display: none; }
-.setup > span { font-size: 14px; color: var(--ink-2); margin-right: 4px; }
-.setup button { padding: 6px 12px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--field); color: var(--ink); font: 14px var(--font-ui); cursor: pointer; transition: border-color .12s, background-color .12s; }
-.setup button:hover { border-color: var(--ink-2); }
-.setup button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--sheet); }
-.setup button:focus-visible { outline: 2px solid var(--dim); outline-offset: 2px; }
-.setup p { flex-basis: 100%; margin: 4px 0 0; font-size: 13px; color: var(--ink-2); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
-@media (max-width: 1100px) { .app { grid-template-columns: minmax(0, 1fr); } .ops { flex-direction: row; flex-wrap: wrap; } }
 </style>
 </head>
 <body>
 <div class="app">
   <header>
     <h1>Conversational</h1>
-    <p>Units mm, work offset G54 with X0 Y0 at the front-left corner and Z0 on top of stock, Grbl output.</p>
+    <p class="text-muted">mm, G54 with X0 Y0 at the front-left corner and Z0 on top of stock, Grbl output.</p>
   </header>
 
-  <nav aria-label="Operation">
-    <h2>Operation</h2>
-    <div class="ops" id="ops">
-      <button data-op="square"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="2" y="4" width="22" height="18" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="2.5 2"/><rect x="6" y="8" width="14" height="10" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>Square up stock</button>
-      <button data-op="face"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="6" width="20" height="14" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M1 9h24M25 9v4M25 13H1M1 13v4M1 17h24" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>Face</button>
-      <button data-op="side"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="5" width="20" height="16" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3 17h20" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="2 2"/><path d="M1 23h24" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>Side face</button>
-      <button data-op="rect"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="5" width="20" height="16" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="7" y="9" width="12" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>Rectangular pocket</button>
-      <button data-op="circ"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="5" width="20" height="16" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="13" cy="13" r="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>Circular pocket</button>
-      <button data-op="bolt"><svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="8" fill="none" stroke="currentColor" stroke-width=".9" stroke-dasharray="3 2"/><circle cx="21" cy="13" r="2" fill="currentColor"/><circle cx="9" cy="19.9" r="2" fill="currentColor"/><circle cx="9" cy="6.1" r="2" fill="currentColor"/></svg>Bolt circle</button>
-    </div>
-    <ul class="checks" id="checks" aria-live="polite"></ul>
-  </nav>
+  <div class="ops" id="ops" role="group" aria-label="Operation">
+    <button class="btn btn-default" data-op="square"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="2" y="4" width="22" height="18" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="2.5 2"/><rect x="6" y="8" width="14" height="10" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>Square up stock</button>
+    <button class="btn btn-default" data-op="face"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="6" width="20" height="14" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M1 9h24M25 9v4M25 13H1M1 13v4M1 17h24" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>Face</button>
+    <button class="btn btn-default" data-op="side"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="5" width="20" height="16" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3 17h20" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="2 2"/><path d="M1 23h24" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>Side face</button>
+    <button class="btn btn-default" data-op="rect"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="5" width="20" height="16" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="7" y="9" width="12" height="8" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>Rectangular pocket</button>
+    <button class="btn btn-default" data-op="circ"><svg viewBox="0 0 26 26" aria-hidden="true"><rect x="3" y="5" width="20" height="16" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="13" cy="13" r="5.5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>Circular pocket</button>
+    <button class="btn btn-default" data-op="bolt"><svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="8" fill="none" stroke="currentColor" stroke-width=".9" stroke-dasharray="3 2"/><circle cx="21" cy="13" r="2" fill="currentColor"/><circle cx="9" cy="19.9" r="2" fill="currentColor"/><circle cx="9" cy="6.1" r="2" fill="currentColor"/></svg>Bolt circle</button>
+  </div>
 
-  <main class="sheet" aria-label="Sketch">
-    <div class="setup" id="setup" hidden>
-      <span>Setup</span>
-      <button data-setup="1">1: face top, cut sides</button>
-      <button data-setup="2">2: flip, face to thickness</button>
-      <p id="setup-note"></p>
+  <div class="setup" id="setup" hidden>
+    <div class="btn-group seg" role="group" aria-label="Setup">
+      <button class="btn btn-default btn-sm" data-setup="1">1: face top, cut sides</button>
+      <button class="btn btn-default btn-sm" data-setup="2">2: flip, face to thickness</button>
     </div>
-    <div class="setup" id="sidepick" hidden>
-      <span>Side</span>
-      <button data-side="y-">Front (Y−)</button>
-      <button data-side="y+">Back (Y+)</button>
-      <button data-side="x-">Left (X−)</button>
-      <button data-side="x+">Right (X+)</button>
-      <p>Climb cut along the side, one radial pass per stepover, retracting to come back.</p>
+    <p id="setup-note"></p>
+  </div>
+  <div class="setup" id="sidepick" hidden>
+    <div class="btn-group seg" role="group" aria-label="Side">
+      <button class="btn btn-default btn-sm" data-side="y-">Front (Y−)</button>
+      <button class="btn btn-default btn-sm" data-side="y+">Back (Y+)</button>
+      <button class="btn btn-default btn-sm" data-side="x-">Left (X−)</button>
+      <button class="btn btn-default btn-sm" data-side="x+">Right (X+)</button>
     </div>
+    <p>Climb cut along the side, one radial pass per stepover, retracting to come back.</p>
+  </div>
+
+  <ul class="checks" id="checks" aria-live="polite"></ul>
+
+  <main aria-label="Sketch">
     <figure>
       <figcaption>Plan, looking down Z</figcaption>
       <div class="view" id="v-plan"></div>
@@ -172,37 +177,38 @@ pre .arc { color: var(--path); }
       <figcaption id="sec-cap">Section through centre, Z exaggerated</figcaption>
       <div class="view" id="v-sec"></div>
     </figure>
+    <figure>
+      <figcaption>Tool</figcaption>
+      <div class="view" id="v-tool"></div>
+    </figure>
+    <figure id="f-step">
+      <figcaption>Stepover, % of tool Ø</figcaption>
+      <div class="view" id="v-step"></div>
+    </figure>
     <noscript><p>This widget draws the sketch and its inputs with JavaScript.</p></noscript>
   </main>
 
-  <aside class="side">
-    <section class="sheet">
-      <h2>Tool</h2>
-      <div class="toolrow">
-        <figure><div class="view" id="v-tool"></div></figure>
-        <figure id="f-step"><div class="view" id="v-step"></div><p class="cap">Stepover, % of tool Ø</p></figure>
-      </div>
-    </section>
-    <section class="sheet code">
-      <div class="code-head">
-        <h2>G-code</h2>
-        <button class="btn" id="copy">Copy</button>
-        <button class="btn primary" id="dl">Download .nc</button>
-        <button class="btn primary" id="load" hidden>Load in CNCjs</button>
-      </div>
-      <p class="stats" id="stats"></p>
-      <p class="stats" id="cnc-note" aria-live="polite" hidden></p>
-      <pre id="gcode" aria-label="Generated G-code"></pre>
-    </section>
-  </aside>
+  <section class="code" aria-label="Program">
+    <div class="code-head">
+      <h2>G-code</h2>
+      <button class="btn btn-default btn-sm" id="copy">Copy</button>
+      <button class="btn btn-primary btn-sm" id="dl">Download .nc</button>
+      <button class="btn btn-primary btn-sm" id="load" hidden>Load in CNCjs</button>
+    </div>
+    <p class="stats" id="stats"></p>
+    <p class="stats" id="cnc-note" aria-live="polite" hidden></p>
+    <pre id="gcode" aria-label="Generated G-code"></pre>
+  </section>
 </div>
 
 <script>
+// Drawn 1:1 in a 320 px sheet (a CNCjs sidebar less its padding), so sketch text and
+// the dimension inputs keep their size inside CNCjs.
 const VIEWS = {
-  plan: { vb: [800, 470] },
-  sec:  { vb: [800, 240] },
-  tool: { vb: [420, 172] },
-  step: { vb: [220, 150] },
+  plan: { vb: [320, 250] },
+  sec:  { vb: [320, 230] },
+  tool: { vb: [320, 172] },
+  step: { vb: [320, 110] },
 };
 
 const st = {
@@ -261,6 +267,8 @@ const OPS = {
 
 const get = p => p.split('.').reduce((o, k) => o[k], st);
 const set = (p, v) => { const k = p.split('.'); const last = k.pop(); k.reduce((o, x) => o[x], st)[last] = v; };
+// pressed state for toggle buttons: Bootstrap's look (.active) and its accessible state
+const press = (b, on) => { b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); };
 const n2 = v => +v.toFixed(2);
 const fmt = v => String(Math.round(v * 1000) / 1000);
 const rad = d => d * Math.PI / 180;
@@ -278,6 +286,17 @@ for (const [id, v] of Object.entries(VIEWS)) {
   el.innerHTML = `<svg viewBox="0 0 ${v.vb[0]} ${v.vb[1]}" aria-hidden="true">${DEFS}<g></g></svg><div class="overlay"></div>`;
   v.g = el.querySelector('g:last-of-type');
   v.ov = el.querySelector('.overlay');
+  v.el = el;
+}
+
+// The column fixes the plan's width, so its height follows the stock: no empty bands round a long, thin bar.
+function fitPlan() {
+  const v = VIEWS.plan, VW = v.vb[0];
+  const h = Math.round(Math.min(Math.max(84 + st.stock.h * (VW - 128) / st.stock.w, 160), 300));
+  if (h === v.vb[1]) return;
+  v.vb[1] = h;
+  v.el.style.aspectRatio = `${VW} / ${h}`;
+  v.el.querySelector('svg').setAttribute('viewBox', `0 0 ${VW} ${h}`);
 }
 
 const inputs = {};
@@ -323,11 +342,19 @@ const at = (v, x, y) => ({ v, x, y });
 function planFrame() {
   const [VW, VH] = VIEWS.plan.vb;
   const { w: W, h: H } = st.stock;
-  const L = 170, R = 140, T = 66, B = 86;
+  const L = 64, R = 64, T = 40, B = 44;
   const aw = VW - L - R, ah = VH - T - B;
   const s = Math.min(aw / W, ah / H);
   const ox = L + (aw - W * s) / 2, top = T + (ah - H * s) / 2, bot = top + H * s;
   return { s, ox, top, bot, W, H, X: x => ox + x * s, Y: y => bot - y * s };
+}
+
+// The section keeps its own horizontal scale: its dimension chains need different margins than the plan's.
+const ZT = 56;
+function secFrame(span, L = 78, R = 62) {
+  const s = (VIEWS.sec.vb[0] - L - R) / span;
+  // Z drawn up to 140 px for the stock, up to 10x the X scale, so shallow cuts read clearly
+  return { s, ox: L, X: x => L + x * s, zs: T => Math.min(140 / T, s * 10) };
 }
 
 // ---------- toolpath geometry (mm), shared by sketch and G-code ----------
@@ -409,7 +436,7 @@ function boltHoles() {
 function centreDims(o, pos, fr, key, cx, cy) {
   const { X, Y, bot, W } = fr;
   const C = [X(cx), Y(cy)];
-  const yX = bot + 42, xY = X(W) + 66;
+  const yX = bot + 26, xY = X(W) + 30;
   o.push(g(key + '.cx', ext(X(0), bot + 6, X(0), yX + 6) + ln('ctr', C[0], C[1], C[0], yX + 6) + dl(X(0), yX, C[0], yX)));
   o.push(g(key + '.cy', ext(X(W) + 6, Y(0), xY + 6, Y(0)) + ln('ctr', C[0], C[1], xY + 6, C[1]) + dl(xY, Y(0), xY, C[1])));
   pos[key + '.cx'] = at('plan', (X(0) + C[0]) / 2, yX);
@@ -437,7 +464,7 @@ const PLAN = {
       }
       o.push(`<circle class="toolmark" cx="${n2((x0 + x1) / 2)}" cy="${n2(Y(q.ay - tR() - offs[0]))}" r="${n2(tR() * s)}"/>`);
     }
-    const yd = y0 + 24, xd = x1 - 60;
+    const yd = y0 + 20, xd = x1 - 40;
     o.push(g('sq.w', dl(x0, yd, x1, yd)));
     pos['sq.w'] = at('plan', (x0 + x1) / 2, yd);
     o.push(g('sq.h', dl(xd, y0, xd, y1)));
@@ -488,14 +515,15 @@ const PLAN = {
     if (last) o.push(`<circle class="toolmark" cx="${n2(X(cx))}" cy="${n2(Y(cy - last.hh))}" r="${n2(tR() * s)}"/>`);
     o.push(cross(X(cx), Y(cy)));
     centreDims(o, pos, fr, 'rect', cx, cy);
-    const yd = y0 + 22, xd = x1 - 58;
-    o.push(g('rect.w', dl(x0, yd, x1, yd)));
+    // W below the pocket, L to its right, R inside on the first corner
+    const yd = y1 + 14, xd = x1 + 22;
+    o.push(g('rect.w', ext(x0, y1 + 3, x0, yd + 5) + ext(x1, y1 + 3, x1, yd + 5) + dl(x0, yd, x1, yd)));
     pos['rect.w'] = at('plan', (x0 + x1) / 2, yd);
-    o.push(g('rect.l', dl(xd, y0, xd, y1)));
+    o.push(g('rect.l', ext(x1 + 3, y0, xd + 5, y0) + ext(x1 + 3, y1, xd + 5, y1) + dl(xd, y0, xd, y1)));
     pos['rect.l'] = at('plan', xd, (y0 + y1) / 2);
     const cc = [x0 + rx, y0 + rx], k = Math.SQRT1_2;
-    o.push(g('rect.r', dl(cc[0] + 18 * k, cc[1] + 18 * k, cc[0] - rx * k, cc[1] - rx * k, 'end')));
-    pos['rect.r'] = at('plan', cc[0] + 18 * k + 40, cc[1] + 18 * k + 14);
+    o.push(g('rect.r', dl(cc[0] + 14 * k, cc[1] + 14 * k, cc[0] - rx * k, cc[1] - rx * k, 'end')));
+    pos['rect.r'] = at('plan', cc[0] + 14 * k + 30, cc[1] + 14 * k + 10);
   },
   circ(o, pos, fr) {
     const { X, Y, s } = fr;
@@ -510,12 +538,12 @@ const PLAN = {
     // diameter dimension drawn across the circle; the value sits inside when it fits
     const u = [Math.cos(rad(35)), -Math.sin(rad(35))];
     o.push(g('circ.d', dl(C[0] - u[0] * r, C[1] - u[1] * r, C[0] + u[0] * r, C[1] + u[1] * r)));
-    if (r >= 64) {
+    if (r >= 50) {
       pos['circ.d'] = at('plan', C[0] + u[0] * r * 0.5, C[1] + u[1] * r * 0.5);
     } else {
-      const p = [C[0] + u[0] * (r + 30), C[1] + u[1] * (r + 30)];
+      const p = [C[0] + u[0] * (r + 20), C[1] + u[1] * (r + 20)];
       o.push(g('circ.d', ln('dl', C[0] + u[0] * r, C[1] + u[1] * r, p[0], p[1]) + ln('dl', p[0], p[1], p[0] + 16, p[1])));
-      pos['circ.d'] = at('plan', p[0] + 52, p[1]);
+      pos['circ.d'] = at('plan', p[0] + 47, p[1]);
     }
   },
   bolt(o, pos, fr) {
@@ -532,10 +560,11 @@ const PLAN = {
     o.push(`<circle class="toolmark" cx="${n2(X(holes[0].x))}" cy="${n2(Y(holes[0].y))}" r="${n2(hr)}"/>`);
     o.push(cross(C[0], C[1]));
     centreDims(o, pos, fr, 'bolt', cx, cy);
-    // bolt circle diameter, drawn between holes
+    // bolt circle diameter, drawn between holes, its value on a leader outside the circle
     const tb = rad(a0 + 180 / n + 180), u = [Math.cos(tb), -Math.sin(tb)];
-    o.push(g('bolt.bcd', dl(C[0] - u[0] * R, C[1] - u[1] * R, C[0] + u[0] * R, C[1] + u[1] * R)));
-    pos['bolt.bcd'] = at('plan', C[0] + u[0] * R * 0.55, C[1] + u[1] * R * 0.55);
+    const bp = [C[0] + u[0] * (R + 14), C[1] + u[1] * (R + 14)], bs = u[0] >= 0 ? 1 : -1;
+    o.push(g('bolt.bcd', dl(C[0] - u[0] * R, C[1] - u[1] * R, C[0] + u[0] * R, C[1] + u[1] * R) + ln('dl', C[0] + u[0] * R, C[1] + u[1] * R, bp[0], bp[1]) + ln('dl', bp[0], bp[1], bp[0] + bs * 12, bp[1])));
+    pos['bolt.bcd'] = at('plan', bp[0] + bs * 43, bp[1]);
     pos['bolt.n'] = at('plan', C[0], C[1] - R * 0.45);
     // start angle from +X
     const ra = R * 0.36;
@@ -552,7 +581,7 @@ const PLAN = {
     const p = [H0[0] + v[0] * (hr + 26), H0[1] + v[1] * (hr + 26) - 18];
     const side = v[0] >= 0 ? 1 : -1;
     o.push(g('bolt.hd', ln('dl', p[0], p[1], H0[0] + v[0] * hr, H0[1] + v[1] * hr, 'marker-end="url(#a)"') + ln('dl', p[0], p[1], p[0] + side * 14, p[1])));
-    pos['bolt.hd'] = at('plan', p[0] + side * 52, p[1]);
+    pos['bolt.hd'] = at('plan', p[0] + side * 46, p[1]);
   },
 };
 
@@ -565,11 +594,11 @@ function drawPlan(o, pos) {
   // origin: setup 2 of square-up probes the finished corner
   const sq2 = st.op === 'square' && st.sq.setup === 2;
   const gx = sq2 ? X(sqGeom().ax) : ox, gy = sq2 ? Y(sqGeom().ay) : bot;
-  o.push(`<line class="dl" x1="${n2(gx)}" y1="${n2(gy)}" x2="${n2(gx + 30)}" y2="${n2(gy)}" marker-end="url(#ap)" style="stroke:var(--path)"/>`);
-  o.push(`<line class="dl" x1="${n2(gx)}" y1="${n2(gy)}" x2="${n2(gx)}" y2="${n2(gy - 30)}" marker-end="url(#ap)" style="stroke:var(--path)"/>`);
-  o.push(`<text class="lbl" x="${n2(gx + 34)}" y="${n2(gy - 4)}">X</text><text class="lbl" x="${n2(gx + 5)}" y="${n2(gy - 34)}">Y</text>`);
+  o.push(`<line class="dl" x1="${n2(gx)}" y1="${n2(gy)}" x2="${n2(gx + 24)}" y2="${n2(gy)}" marker-end="url(#ap)" style="stroke:var(--path)"/>`);
+  o.push(`<line class="dl" x1="${n2(gx)}" y1="${n2(gy)}" x2="${n2(gx)}" y2="${n2(gy - 24)}" marker-end="url(#ap)" style="stroke:var(--path)"/>`);
+  o.push(`<text class="lbl" x="${n2(gx + 28)}" y="${n2(gy - 3)}">X</text><text class="lbl" x="${n2(gx + 4)}" y="${n2(gy - 27)}">Y</text>`);
   // stock size
-  const yW = top - 36, xH = ox - 66;
+  const yW = top - 22, xH = ox - 30;
   o.push(g('stock.w', ext(X(0), top - 6, X(0), yW - 6) + ext(X(W), top - 6, X(W), yW - 6) + dl(X(0), yW, X(W), yW)));
   o.push(g('stock.h', ext(ox - 6, top, xH - 6, top) + ext(ox - 6, bot, xH - 6, bot) + dl(xH, bot, xH, top)));
   pos['stock.w'] = at('plan', (X(0) + X(W)) / 2, yW);
@@ -580,11 +609,11 @@ function drawPlan(o, pos) {
 const DEPTH = { face: 'face.depth', rect: 'rect.depth', circ: 'circ.depth', bolt: 'bolt.depth' };
 
 function drawSecSide(o, pos) {
-  const { ox, s } = planFrame();
   const q = sideGeom(), T = st.stock.t;
-  const zt = 76, zs = Math.min(132 / T, s * 4);
+  const { ox, s, zs: zsOf } = secFrame(q.span, 74, 74);
+  const zt = ZT, zs = zsOf(T);
   const Z = z => zt - z * zs, zb = Z(-T);
-  // section across the faced side, drawn to the plan's scale; the faced side is on its own side of the sheet
+  // section across the faced side; the faced side is on its own side of the sheet
   const minus = q.side.endsWith('-');
   const xl = ox, xr = ox + q.span * s;
   const fx = minus ? xl : xr, ix = minus ? xl + q.amt * s : xr - q.amt * s;
@@ -596,26 +625,26 @@ function drawSecSide(o, pos) {
   for (const z of levels(Math.min(q.depth, T), st.stepdown).slice(0, -1)) o.push(ln('layer', fx, Z(z), ix, Z(z)));
 
   const dir = minus ? -1 : 1;
-  const xc = fx + dir * 66, edge = fx + dir * 6;
-  const ys = Math.max(Z(st.safeZ), 16);
+  const xc = fx + dir * 30, edge = fx + dir * 6;
+  const ys = Math.max(Z(st.safeZ), 12);
   o.push(ln('safe', xl - 26, ys, xr + 26, ys));
-  o.push(g('safeZ', ext(fx + dir * 30, ys, xc + dir * 6, ys) + ext(edge, zt, xc + dir * 6, zt) + dl(xc, ys, xc, zt)));
+  o.push(g('safeZ', ext(fx + dir * 12, ys, xc + dir * 6, ys) + ext(edge, zt, xc + dir * 6, zt) + dl(xc, ys, xc, zt)));
   pos['safeZ'] = at('sec', xc, Math.min((ys + zt) / 2, zt - 17));
   o.push(g('side.depth', ext(fx + dir * 2, zd, xc + dir * 6, zd) + dl(xc, zt, xc, zd)));
   pos['side.depth'] = at('sec', xc, Math.max((zt + zd) / 2, zt + 17));
   const xs = ix - dir * 24, sdz = Z(-Math.min(st.stepdown, q.depth));
   o.push(g('stepdown', dl(xs, zt, xs, sdz)));
-  pos['stepdown'] = at('sec', xs - dir * 52, zt + 17);
-  const ox2 = minus ? xr : xl, xt = ox2 - dir * 66;
+  pos['stepdown'] = at('sec', xs - dir * 52, zt + 15);
+  const ox2 = minus ? xr : xl, xt = ox2 - dir * 30;
   o.push(g('stock.t', ext(ox2 - dir * 6, zt, xt - dir * 6, zt) + ext(ox2 - dir * 6, zb, xt - dir * 6, zb) + dl(xt, zt, xt, zb)));
   pos['stock.t'] = at('sec', xt, (zt + zb) / 2);
-  o.push(`<text class="lbl" text-anchor="${minus ? 'start' : 'end'}" x="${n2(minus ? xr + 34 : xl - 34)}" y="${n2(ys - 6)}">clearance</text>`);
+  o.push(`<text class="lbl" text-anchor="${minus ? 'end' : 'start'}" x="${minus ? VIEWS.sec.vb[0] - 4 : 4}" y="${n2(ys - 5)}">clearance</text>`);
 }
 
 function drawSecSquare(o, pos) {
-  const { X, ox, s } = planFrame();
   const q = sqGeom(), one = st.sq.setup === 1;
-  const zt = 76, zs = Math.min(132 / q.T, s * 4);
+  const { X, ox, zs: zsOf } = secFrame(q.W, 112, 62);
+  const zt = ZT, zs = zsOf(q.T);
   const Z = z => zt - z * zs;
   const xl = X(0), xr = X(q.W), xa = X(q.ax), xb = X(q.ax + q.w);
   const zb = Z(-(one ? q.T : q.tc));
@@ -641,9 +670,9 @@ function drawSecSquare(o, pos) {
   o.push(`<rect class="jaw" x="${n2(gl - 26)}" y="${n2(jt)}" width="26" height="${n2(jb - jt)}"/><rect class="jaw" x="${n2(gr)}" y="${n2(jt)}" width="26" height="${n2(jb - jt)}"/>`);
 
   // clearance and the top cut on the left chain
-  const ys = Math.max(Z(st.safeZ), 16), xc = ox - 66, xs = ox - 128;
+  const ys = Math.max(Z(st.safeZ), 12), xc = ox - 30, xs = ox - 80;
   o.push(ln('safe', xs - 20, ys, xr + 26, ys));
-  o.push(g('safeZ', ext(ox - 30, ys, xc - 6, ys) + ext(ox - 30, zt, xc - 6, zt) + dl(xc, ys, xc, zt)));
+  o.push(g('safeZ', ext(ox - 12, ys, xc - 6, ys) + ext(ox - 12, zt, xc - 6, zt) + dl(xc, ys, xc, zt)));
   pos['safeZ'] = at('sec', xc, Math.min((ys + zt) / 2, zt - 17));
   const topDim = ext(xl - 4, Z(-top), xc - 6, Z(-top)) + dl(xc, zt, xc, Z(-top));
   if (one) {
@@ -653,7 +682,7 @@ function drawSecSquare(o, pos) {
     o.push(topDim + `<text class="dimtxt" text-anchor="end" x="${n2(xc - 8)}" y="${n2(Math.max((zt + Z(-top)) / 2, zt + 17) + 4)}">face ${fmt(top)}</text>`);
   }
   // stick-out above the jaws
-  o.push(g('sq.stick', ext(gl - 30, jt, xs - 6, jt) + ext(xc - 10, zt, xs - 6, zt) + dl(xs, zt, xs, jt)));
+  o.push(g('sq.stick', ext(gl - 28, jt, xs - 6, jt) + ext(xc - 10, zt, xs - 6, zt) + dl(xs, zt, xs, jt)));
   pos['sq.stick'] = at('sec', xs, (zt + jt) / 2 + 10);
   // side cut, measured in the right-hand band
   if (side) {
@@ -664,28 +693,29 @@ function drawSecSquare(o, pos) {
     } else {
       o.push(dl(xw, zt, xw, Z(-side)) + `<text class="dimtxt" text-anchor="end" x="${n2(xb - 8)}" y="${n2(Z(-side) + 16)}">lip ${fmt(side)}</text>`);
     }
+    // the step is a few px tall: its value sits just above the top, clear of the side cut's
     const xm = (xl + xa) / 2, sdz = Z(-Math.min(st.stepdown, side));
     o.push(g('stepdown', dl(xm, zt, xm, sdz)));
-    pos['stepdown'] = at('sec', xa + 58, zt + 17);
+    pos['stepdown'] = at('sec', xa + 58, zt - 14);
   }
   // thickness on the right: raw in setup 1, finished in setup 2
-  const xt = xr + 70;
+  const xt = xr + 30;
   if (one) {
-    o.push(g('stock.t', ext(xr + 30, zt, xt + 6, zt) + ext(xr + 30, zb, xt + 6, zb) + dl(xt, zt, xt, zb)));
+    o.push(g('stock.t', ext(xr + 6, zt, xt + 6, zt) + ext(xr + 6, zb, xt + 6, zb) + dl(xt, zt, xt, zb)));
     pos['stock.t'] = at('sec', xt, (zt + zb) / 2);
   } else {
     o.push(g('sq.t', ext(xb + 30, Z(-top), xt + 6, Z(-top)) + ext(xb + 30, zb, xt + 6, zb) + dl(xt, Z(-top), xt, zb)));
     pos['sq.t'] = at('sec', xt, (Z(-top) + zb) / 2);
   }
-  o.push(`<text class="lbl" x="${n2(xr + 34)}" y="${n2(ys - 6)}">clearance</text><text class="lbl" x="${n2(xr + 34)}" y="${zt - 6}">Z0</text>`);
+  o.push(`<text class="lbl" text-anchor="end" x="${VIEWS.sec.vb[0] - 4}" y="${n2(ys - 5)}">clearance</text><text class="lbl" x="${n2(xr + 4)}" y="${zt - 5}">Z0</text>`);
 }
 
 function drawSec(o, pos) {
   if (st.op === 'square') return drawSecSquare(o, pos);
   if (st.op === 'side') return drawSecSide(o, pos);
-  const { X, ox, W, s } = planFrame();
-  const T = st.stock.t;
-  const zt = 76, zs = Math.min(132 / T, s * 4);
+  const W = st.stock.w, T = st.stock.t;
+  const { X, ox, s, zs: zsOf } = secFrame(W);
+  const zt = ZT, zs = zsOf(T);
   const Z = z => zt - z * zs, zb = Z(-T);
   const depth = get(DEPTH[st.op]);
   o.push(`<rect class="sect" x="${n2(ox)}" y="${zt}" width="${n2(W * s)}" height="${n2(T * zs)}"/>`);
@@ -719,50 +749,52 @@ function drawSec(o, pos) {
   const ys = Math.max(Z(st.safeZ), 16);
   o.push(ln('safe', ox - 26, ys, X(W) + 26, ys));
   // left chain: clearance above, depth below
-  const xc = ox - 66;
-  o.push(g('safeZ', ext(ox - 30, ys, xc - 6, ys) + ext(ox - 6, zt, xc - 6, zt) + dl(xc, ys, xc, zt)));
+  const xc = ox - 30;
+  o.push(g('safeZ', ext(ox - 12, ys, xc - 6, ys) + ext(ox - 6, zt, xc - 6, zt) + dl(xc, ys, xc, zt)));
   o.push(g(DEPTH[st.op], ext(first.a - 4, Z(-depth), xc - 6, Z(-depth)) + dl(xc, zt, xc, Z(-depth))));
   const ySafe = (ys + zt) / 2;
   pos['safeZ'] = at('sec', xc, Math.min(ySafe, zt - 17));
   pos[DEPTH[st.op]] = at('sec', xc, Math.max((zt + Z(-depth)) / 2, zt + 17));
   // thickness on the right
-  const xt = X(W) + 66;
+  const xt = X(W) + 30;
   o.push(g('stock.t', ext(X(W) + 6, zt, xt + 6, zt) + ext(X(W) + 6, zb, xt + 6, zb) + dl(xt, zt, xt, zb)));
   pos['stock.t'] = at('sec', xt, (zt + zb) / 2);
   // peck bracket beside the right-most hole
   if (st.op === 'bolt') {
     const xp = first.b + 12, pz = Z(-Math.min(st.bolt.peck, depth));
     o.push(g('bolt.peck', ext(first.b + 2, zt, xp + 6, zt) + dl(xp, zt, xp, pz)));
-    pos['bolt.peck'] = at('sec', xp + 54, Math.max((zt + pz) / 2, zt + 15));
+    pos['bolt.peck'] = at('sec', xp + 44, Math.max((zt + pz) / 2, zt + 15));
   }
-  o.push(`<text class="lbl" x="${n2(X(W) + 30)}" y="${n2(ys - 6)}">clearance</text><text class="lbl" x="${n2(X(W) + 30)}" y="${zt - 6}">Z0</text>`);
+  o.push(`<text class="lbl" text-anchor="end" x="${VIEWS.sec.vb[0] - 4}" y="${n2(ys - 5)}">clearance</text><text class="lbl" x="${n2(X(W) + 4)}" y="${zt - 5}">Z0</text>`);
 }
 
 // ---------- tool views ----------
 function drawTool(o, pos) {
   const drill = st.op === 'bolt';
-  o.push(`<rect class="feat" x="132" y="12" width="36" height="62"/>`);
+  // drawn on a 300-wide layout, shifted left 40 to sit in the 320 sheet with room for the feeds
+  const t = [`<rect class="feat" x="132" y="12" width="36" height="62"/>`];
   if (drill) {
-    o.push(`<path class="feat" d="M137,74 V132 L150,148 L163,132 V74Z"/><path class="ctr" d="M137,90 L163,104 M137,108 L163,122"/>`);
+    t.push(`<path class="feat" d="M137,74 V132 L150,148 L163,132 V74Z"/><path class="ctr" d="M137,90 L163,104 M137,108 L163,122"/>`);
   } else {
-    o.push(`<path class="feat" d="M136,74 V142 H164 V74Z"/><path class="ctr" d="M136,84 L164,100 M136,104 L164,120 M136,124 L164,140"/>`);
-    o.push(g('tool.d', ext(136, 146, 136, 166) + ext(164, 146, 164, 166) + dl(136, 160, 164, 160) + ln('dl', 164, 160, 186, 160)));
-    pos['tool.d'] = at('tool', 232, 160);
-    o.push(g('tool.feed', `<line class="dl" x1="184" y1="122" x2="232" y2="122" marker-end="url(#a)"/>`));
-    pos['tool.feed'] = at('tool', 322, 122);
+    t.push(`<path class="feat" d="M136,74 V142 H164 V74Z"/><path class="ctr" d="M136,84 L164,100 M136,104 L164,120 M136,124 L164,140"/>`);
+    t.push(g('tool.d', ext(136, 146, 136, 166) + ext(164, 146, 164, 166) + dl(136, 160, 164, 160) + ln('dl', 164, 160, 186, 160)));
+    pos['tool.d'] = at('tool', 196, 160);
+    t.push(g('tool.feed', `<line class="dl" x1="184" y1="122" x2="232" y2="122" marker-end="url(#a)"/>`));
+    pos['tool.feed'] = at('tool', 262, 122);
   }
-  o.push(g('tool.rpm', `<path class="dl" d="M124,28 A28,9 0 1 0 176,28" marker-end="url(#a)"/>`));
-  pos['tool.rpm'] = at('tool', 58, 30);
-  o.push(g('tool.plunge', `<line class="dl" x1="192" y1="36" x2="192" y2="84" marker-end="url(#a)"/>`));
-  pos['tool.plunge'] = at('tool', 292, 60);
+  t.push(g('tool.rpm', `<path class="dl" d="M124,28 A28,9 0 1 0 176,28" marker-end="url(#a)"/>`));
+  pos['tool.rpm'] = at('tool', 44, 30);
+  t.push(g('tool.plunge', `<line class="dl" x1="192" y1="36" x2="192" y2="84" marker-end="url(#a)"/>`));
+  pos['tool.plunge'] = at('tool', 238, 60);
+  o.push(`<g transform="translate(-40 0)">${t.join('')}</g>`);
 }
 
 function drawStep(o, pos) {
-  const r = 38, x1 = 62, x2 = x1 + 2 * r * st.tool.step / 100, y = 92;
+  const r = 30, x1 = 50, x2 = x1 + 2 * r * st.tool.step / 100, y = 72;
   o.push(`<circle class="toolmark" cx="${x1}" cy="${y}" r="${r}"/><circle class="tp" cx="${n2(x2)}" cy="${y}" r="${r}"/>`);
   o.push(cross(x1, y, 5) + cross(x2, y, 5));
-  o.push(g('tool.step', ext(x1, y - 8, x1, 30) + ext(x2, y - 8, x2, 30) + dl(x1, 36, x2, 36)));
-  pos['tool.step'] = at('step', Math.max((x1 + x2) / 2, 80), 36);
+  o.push(g('tool.step', ext(x1, y - 8, x1, 16) + ext(x2, y - 8, x2, 16) + dl(x1, 22, x2, 22)));
+  pos['tool.step'] = at('step', Math.max((x1 + x2) / 2, 70), 22);
 }
 
 // ---------- checks ----------
@@ -970,6 +1002,7 @@ function paint(lines) {
 // ---------- render ----------
 let current = [];
 function render() {
+  fitPlan();
   const out = { plan: [], sec: [], tool: [], step: [] };
   const pos = {};
   drawPlan(out.plan, pos);
@@ -983,10 +1016,10 @@ function render() {
     : st.op === 'side' ? `Section across the ${st.side.side.toUpperCase().replace('-', '−')} side, Z exaggerated` : 'Section through centre, Z exaggerated';
   const setupEl = document.getElementById('setup');
   setupEl.hidden = st.op !== 'square';
-  for (const b of setupEl.querySelectorAll('button')) b.setAttribute('aria-pressed', String(+b.dataset.setup === st.sq.setup));
+  for (const b of setupEl.querySelectorAll('button')) press(b, +b.dataset.setup === st.sq.setup);
   const sideEl = document.getElementById('sidepick');
   sideEl.hidden = st.op !== 'side';
-  for (const b of sideEl.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.side === st.side.side));
+  for (const b of sideEl.querySelectorAll('button')) press(b, b.dataset.side === st.side.side);
   document.getElementById('setup-note').textContent = st.sq.setup === 1
     ? `Clamp the raw stock ${fmt(st.sq.stick)} mm above the jaws. Probe X0 Y0 on the raw front-left corner, Z0 on top.`
     : `Flip the part and clamp on the finished sides, ${fmt(st.sq.stick)} mm above the jaws. Probe X0 Y0 on the finished front-left corner, Z0 on top.`;
@@ -1000,22 +1033,25 @@ function render() {
     if (!at) continue;
     const v = VIEWS[at.v];
     if (el.parentNode !== v.ov) v.ov.append(el);
-    el.style.left = `${at.x / v.vb[0] * 100}%`;
-    el.style.top = `${at.y / v.vb[1] * 100}%`;
+    // keep the box inside its sketch: centred on its dimension where it fits, nudged in where it does not
+    const ow = v.ov.clientWidth, oh = v.ov.clientHeight, hw = el.offsetWidth / 2, hh = el.offsetHeight / 2;
+    const x = at.x / v.vb[0] * ow, y = at.y / v.vb[1] * oh;
+    el.style.left = ow ? `${Math.min(Math.max(x, hw), ow - hw) / ow * 100}%` : `${at.x / v.vb[0] * 100}%`;
+    el.style.top = oh ? `${Math.min(Math.max(y, hh), oh - hh) / oh * 100}%` : `${at.y / v.vb[1] * 100}%`;
     if (!el.querySelector('input').matches(':invalid')) el.dataset.state = state.get(p) || '';
   }
 
   const ul = document.getElementById('checks');
   ul.innerHTML = issues.length
-    ? issues.map(i => `<li data-lv="${i.lv}">${esc(i.text)}</li>`).join('')
-    : '<li>Ready to cut.</li>';
+    ? issues.map(i => `<li class="alert alert-${i.lv === 'error' ? 'danger' : 'warning'}" data-lv="${i.lv}">${esc(i.text)}</li>`).join('')
+    : '<li class="alert alert-success">Ready to cut.</li>';
 
   const blocked = issues.some(i => i.lv === 'error');
   const pre = document.getElementById('gcode'), stats = document.getElementById('stats');
   document.getElementById('copy').disabled = document.getElementById('dl').disabled = blocked;
   if (blocked) {
     current = [];
-    pre.innerHTML = '<span class="c">(fix the errors on the left to generate code)</span>';
+    pre.innerHTML = '<span class="c">(fix the errors above to generate code)</span>';
     stats.textContent = '';
     updateLoad();
     return;
@@ -1034,7 +1070,7 @@ function render() {
 // ---------- wiring ----------
 function selectOp(op) {
   st.op = op;
-  for (const b of document.querySelectorAll('#ops button')) b.setAttribute('aria-pressed', String(b.dataset.op === op));
+  for (const b of document.querySelectorAll('#ops button')) press(b, b.dataset.op === op);
   buildInputs();
   render();
 }
@@ -1076,6 +1112,27 @@ const token = new URLSearchParams(location.search).get('token');
 const sameOriginParent = () => { try { return window.parent.location.origin === location.origin; } catch { return false; } };
 // standalone: own tab or file; cncjs: served and framed by CNCjs; foreign: framed by CNCjs from another origin
 const embedding = window.parent === window || !token ? 'standalone' : sameOriginParent() ? 'cncjs' : 'foreign';
+document.documentElement.dataset.embedding = embedding;
+
+// Served by CNCjs, wear CNCjs's own stylesheet (Bootstrap 3 and its theme) instead of the
+// stand-in. It goes ahead of the widget's styles, which only add layout and the sketch.
+function adoptCncjsStyles() {
+  const sheets = [...window.parent.document.querySelectorAll('link[rel="stylesheet"][href]')];
+  if (!sheets.length) return;
+  const fallback = document.getElementById('cncjs-fallback');
+  let pending = sheets.length;
+  for (const sheet of sheets) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = sheet.href;
+    link.addEventListener('load', () => {
+      if (--pending) return;
+      fallback.remove();
+      render();
+    });
+    document.head.insertBefore(link, fallback);
+  }
+}
 // load.state: idle | loading | loaded | refused | failed. `program` is the text that was sent;
 // `editedTo` is the editor's text when the outcome arrived, if it had already changed.
 const NO_LOAD = { state: 'idle', message: '', program: '', editedTo: null };
@@ -1139,6 +1196,7 @@ async function loadIntoCncjs() {
 }
 
 if (embedding === 'cncjs') {
+  adoptCncjsStyles();
   window.addEventListener('message', e => {
     if (e.source !== window.parent || e.origin !== location.origin) return;
     const msg = e.data || {};
