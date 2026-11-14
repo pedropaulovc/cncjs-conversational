@@ -28,6 +28,10 @@ be served by CNCjs (`--mount`) rather than from another address. CNCjs's widget
 sandbox blocks file downloads, so **Download .nc** only appears when the page is
 opened on its own (for example `web/index.html` in a browser).
 
+The widget is one column as wide as CNCjs's sidebars, and served by CNCjs it
+uses CNCjs's own stylesheet (Bootstrap 3), so its buttons and messages match the
+other widgets. Opened on its own, a small stand-in stylesheet gives the same look.
+
 ## Checks
 
 Inputs are validated as you type. Errors (a pocket smaller than the tool, a cut
