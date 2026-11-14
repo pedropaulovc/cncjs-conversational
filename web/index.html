@@ -114,6 +114,7 @@ figcaption { font-size: 12px; color: var(--ink-2); }
 .ah { fill: var(--dim); }
 .ahp { fill: var(--path); }
 .safe { stroke: var(--dim); stroke-width: 1; stroke-dasharray: 6 4; }
+.leader { stroke: var(--dim); stroke-width: .8; stroke-dasharray: 2 2; }
 .lbl { fill: var(--ink-2); font: 11px Arial, "Helvetica Neue", Helvetica, sans-serif; }
 .dg.on .dl, .dg.on .ext { stroke: var(--dim); stroke-width: 2.2; opacity: 1; }
 .dg.on .feat, .dg.on .edge { stroke: var(--dim); }
@@ -281,8 +282,9 @@ const DEFS = `<defs>
 for (const [id, v] of Object.entries(VIEWS)) {
   const el = document.getElementById('v-' + id);
   el.style.aspectRatio = `${v.vb[0]} / ${v.vb[1]}`;
-  el.innerHTML = `<svg viewBox="0 0 ${v.vb[0]} ${v.vb[1]}" aria-hidden="true">${DEFS}<g></g></svg><div class="overlay"></div>`;
-  v.g = el.querySelector('g:last-of-type');
+  el.innerHTML = `<svg viewBox="0 0 ${v.vb[0]} ${v.vb[1]}" aria-hidden="true">${DEFS}<g class="art"></g><g class="leaders"></g></svg><div class="overlay"></div>`;
+  v.g = el.querySelector('g.art');
+  v.leaders = el.querySelector('g.leaders');
   v.ov = el.querySelector('.overlay');
   v.el = el;
 }
@@ -297,6 +299,18 @@ function fitPlan() {
   v.vb[1] = h;
   v.el.style.aspectRatio = `${VW} / ${h}`;
   v.el.querySelector('svg').setAttribute('viewBox', `0 0 ${VW} ${h}`);
+}
+// A committed number fires `change` on the mousedown that blurs it. Refitting then would move
+// everything below the plan between that mousedown and its mouseup, and the click would miss
+// its button, so with a button held the refit waits until the click has been dispatched.
+let pointerHeld = false;
+addEventListener('pointerdown', () => { pointerHeld = true; }, true);
+addEventListener('pointerup', () => { pointerHeld = false; }, true);
+addEventListener('pointercancel', () => { pointerHeld = false; }, true);
+function refitPlan() {
+  const run = () => { fitPlan(); render(); };
+  if (!pointerHeld) return run();
+  addEventListener('pointerup', () => setTimeout(run), { once: true, capture: true });
 }
 
 const inputs = {};
@@ -322,7 +336,7 @@ function buildInputs() {
     });
     inp.addEventListener('focus', () => { active = p; render(); });
     inp.addEventListener('blur', () => { active = null; render(); });
-    if (p === 'stock.w' || p === 'stock.h') inp.addEventListener('change', () => { fitPlan(); render(); });
+    if (p === 'stock.w' || p === 'stock.h') inp.addEventListener('change', refitPlan);
     inputs[p] = lab;
   }
 }
@@ -1001,8 +1015,15 @@ function paint(lines) {
 // ---------- dimension boxes ----------
 // Each box is centred on its dimension. Where that would leave its sketch or cover a box
 // placed before it (fields order: stock first, then the feature, then the tool), it moves to
-// the nearest free spot. All boxes are measured before any is moved: one layout per pass.
-const GAP = 2;
+// the nearest free spot and a leader ties it back to its dimension. All boxes are measured
+// before any is moved: one layout per pass.
+const GAP = 2, LEADER_FROM = 8;
+// candidate moves in 2 px steps, nearest first (straight before diagonal at equal distance)
+const OFFSETS = (() => {
+  const o = [];
+  for (let dy = -240; dy <= 240; dy += 2) for (let dx = -240; dx <= 240; dx += 2) o.push([dx, dy, dx * dx + dy * dy]);
+  return o.sort((a, b) => a[2] - b[2] || Math.abs(a[0]) - Math.abs(b[0]));
+})();
 let placedFor = null;
 function placeBoxes(pos = placedFor) {
   if (!pos) return;
@@ -1017,7 +1038,7 @@ function placeBoxes(pos = placedFor) {
     items.push({ el, at, v });
   }
   for (const it of items) Object.assign(it, { w: it.el.offsetWidth, h: it.el.offsetHeight, ow: it.v.ov.clientWidth, oh: it.v.ov.clientHeight });
-  const taken = new Map();
+  const taken = new Map(), leaders = new Map(Object.values(VIEWS).map(v => [v, []]));
   for (const it of items) {
     const { at, v, w, h, ow, oh } = it;
     // not laid out (a collapsed widget): keep the dimension's spot until the resize observer places it
@@ -1026,27 +1047,24 @@ function placeBoxes(pos = placedFor) {
     const rects = taken.get(v);
     const free = (x, y) => x - w / 2 >= 0 && x + w / 2 <= ow && y - h / 2 >= 0 && y + h / 2 <= oh
       && rects.every(r => x + w / 2 + GAP <= r.l || x - w / 2 - GAP >= r.r || y + h / 2 + GAP <= r.t || y - h / 2 - GAP >= r.b);
-    const x0 = Math.min(Math.max(at.x / v.vb[0] * ow, w / 2), ow - w / 2);
-    const y0 = Math.min(Math.max(at.y / v.vb[1] * oh, h / 2), oh - h / 2);
-    const [x, y] = nearestFree(x0, y0, free, Math.max(ow, oh)) ?? [x0, y0];
+    const ax = at.x / v.vb[0] * ow, ay = at.y / v.vb[1] * oh;
+    const x0 = Math.min(Math.max(ax, w / 2), ow - w / 2), y0 = Math.min(Math.max(ay, h / 2), oh - h / 2);
+    const hit = OFFSETS.find(([dx, dy]) => free(x0 + dx, y0 + dy));
+    const [x, y] = hit ? [x0 + hit[0], y0 + hit[1]] : [x0, y0];
     rects.push({ l: x - w / 2, r: x + w / 2, t: y - h / 2, b: y + h / 2 });
     it.left = x / ow * 100;
     it.top = y / oh * 100;
+    // the box's edge point nearest its dimension; a leader is drawn when the box sits clear of it
+    const ex = Math.min(Math.max(ax, x - w / 2), x + w / 2), ey = Math.min(Math.max(ay, y - h / 2), y + h / 2);
+    // the dimension point, for checking how far a box strays from what it dimensions
+    Object.assign(it.el.dataset, { ax: n2(ax), ay: n2(ay) });
+    if (Math.hypot(ex - ax, ey - ay) > LEADER_FROM) leaders.get(v).push(ln('leader', at.x, at.y, ex / ow * v.vb[0], ey / oh * v.vb[1]));
   }
   for (const it of items) {
     it.el.style.left = `${it.left}%`;
     it.el.style.top = `${it.top}%`;
   }
-}
-// rings of growing distance, straight moves before diagonal ones
-function nearestFree(x, y, free, reach) {
-  for (let d = 0; d <= reach; d += 2) {
-    for (const [dx, dy] of [[0, d], [0, -d], [d, 0], [-d, 0]]) if (free(x + dx, y + dy)) return [x + dx, y + dy];
-    for (let k = 2; k < d; k += 2) {
-      for (const [dx, dy] of [[k, d], [-k, d], [k, -d], [-k, -d], [d, k], [d, -k], [-d, k], [-d, -k]]) if (free(x + dx, y + dy)) return [x + dx, y + dy];
-    }
-  }
-  return null;
+  for (const [v, l] of leaders) v.leaders.innerHTML = l.join('');
 }
 new ResizeObserver(() => placeBoxes()).observe(document.querySelector('main'));
 
