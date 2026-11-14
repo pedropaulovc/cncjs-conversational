@@ -4,9 +4,12 @@
 
 - One column at the width of CNCjs's sidebars (340 px) instead of three, with
   the sketches redrawn 1:1 for that width so their text and number boxes stay
-  readable. The plan's height follows the stock's shape.
+  readable. A number box that would cover another or leave its sketch moves to
+  the nearest free spot. The plan's height follows the stock's shape. Sections
+  exaggerate Z further so cut depths read clearly.
 - Served by CNCjs, the widget uses CNCjs's own stylesheet: Bootstrap buttons,
-  toggles and alerts like the other widgets. A stand-in covers standalone use.
+  toggles and alerts like the other widgets. A stand-in covers standalone use
+  and stays if CNCjs's stylesheet fails to load.
 
 ## [0.2.2] - 2026-11-10
 

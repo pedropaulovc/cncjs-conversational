@@ -52,55 +52,75 @@ test('side face refuses a cut deeper than the stock', async () => {
   assert.equal(await page.locator('#dl').isDisabled(), true);
 });
 
-// Every state of every operation, as the sidebar column shows it: no dimension box may cover
-// another or hang outside its sketch, and nothing may scroll sideways.
+// As the sidebar column shows it: no dimension box may cover another or hang outside its
+// sketch, and nothing may scroll sideways. Each case starts from a fresh page; besides every
+// operation's defaults it covers thin stock and features near the stock's edges.
 test('at CNCjs sidebar width, dimension boxes stay apart and inside their sketches', async () => {
-  const states = [
+  const cases = [
     ['Square up stock', '1: face top, cut sides'], ['Square up stock', '2: flip, face to thickness'],
     ['Face'], ['Side face', 'Front (Y−)'], ['Side face', 'Back (Y+)'], ['Side face', 'Left (X−)'], ['Side face', 'Right (X+)'],
     ['Rectangular pocket'], ['Circular pocket'], ['Bolt circle'],
+    ['Rectangular pocket', null, { 'Stock thickness': 8, 'Pocket depth': 3 }],
+    ['Circular pocket', null, { 'Stock thickness': 3, 'Pocket depth': 1 }],
+    ['Bolt circle', null, { 'Stock thickness': 6, 'Hole depth to drill tip': 4 }],
+    ['Bolt circle', null, { 'Bolt circle centre Y': 40 }],
+    ['Rectangular pocket', null, { 'Pocket centre X': 60, 'Pocket centre Y': 15, 'Pocket width': 50, 'Pocket length': 20 }],
+    ['Rectangular pocket', null, { 'Pocket centre X': 30, 'Pocket centre Y': 13, 'Pocket width': 40, 'Pocket length': 20 }],
+    ['Side face', 'Left (X−)', { 'Stock thickness': 5, 'Side depth below Z0': 4 }],
   ];
-  for (const [op, variant] of states) {
-    await page.getByRole('button', { name: op, exact: true }).click();
-    if (variant) await page.getByRole('button', { name: variant }).click();
-    const problems = await page.evaluate(() => {
-      const out = [];
-      const doc = document.documentElement;
-      if (doc.scrollWidth > doc.clientWidth) out.push(`page scrolls sideways (${doc.scrollWidth} > ${doc.clientWidth})`);
-      const boxes = [...document.querySelectorAll('.fld:not([hidden])')].map(el => ({
-        name: el.querySelector('input').getAttribute('aria-label'), r: el.getBoundingClientRect(), v: el.closest('.view').getBoundingClientRect(),
-      }));
-      for (const { name, r, v } of boxes) {
-        if (r.left < v.left - 0.5 || r.right > v.right + 0.5 || r.top < v.top - 0.5 || r.bottom > v.bottom + 0.5) out.push(`${name} leaves its sketch`);
-      }
-      boxes.forEach((a, i) => boxes.slice(i + 1).forEach(b => {
-        if (a.r.left < b.r.right && b.r.left < a.r.right && a.r.top < b.r.bottom && b.r.top < a.r.bottom) out.push(`${a.name} covers ${b.name}`);
-      }));
-      return out;
-    });
-    assert.deepEqual(problems, [], [op, variant].filter(Boolean).join(' / '));
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 960 } });
+  try {
+    for (const [op, variant, values = {}] of cases) {
+      const p = await ctx.newPage();
+      await p.goto(page_url);
+      await p.getByRole('button', { name: op, exact: true }).click();
+      if (variant) await p.getByRole('button', { name: variant }).click();
+      for (const [name, value] of Object.entries(values)) await p.getByRole('spinbutton', { name, exact: true }).fill(String(value));
+      const problems = await p.evaluate(() => {
+        const out = [];
+        const doc = document.documentElement;
+        if (doc.scrollWidth > doc.clientWidth) out.push(`page scrolls sideways (${doc.scrollWidth} > ${doc.clientWidth})`);
+        const boxes = [...document.querySelectorAll('.fld:not([hidden])')].map(el => ({
+          name: el.querySelector('input').getAttribute('aria-label'), r: el.getBoundingClientRect(), v: el.closest('.view').getBoundingClientRect(),
+        }));
+        for (const { name, r, v } of boxes) {
+          if (r.left < v.left - 0.5 || r.right > v.right + 0.5 || r.top < v.top - 0.5 || r.bottom > v.bottom + 0.5) out.push(`${name} leaves its sketch`);
+        }
+        boxes.forEach((a, i) => boxes.slice(i + 1).forEach(b => {
+          if (a.r.left < b.r.right && b.r.left < a.r.right && a.r.top < b.r.bottom && b.r.top < a.r.bottom) out.push(`${a.name} covers ${b.name}`);
+        }));
+        return out;
+      });
+      assert.deepEqual(problems, [], `${[op, variant].filter(Boolean).join(' / ')} ${JSON.stringify(values)}`);
+      await p.close();
+    }
+  } finally {
+    await ctx.close();
   }
 });
 
 // Mimic CNCjs 1.11.5: same-origin parent with its stylesheet, a sidebar-wide iframe with the
 // token on its URL, its default sandbox (no allow-downloads), and a `change` reply to the
 // widget's `connect`. `controllers` and `gcode` return those endpoints' bodies (a string is
-// sent as HTML); `gate` lets a test hold the controllers reply; `widgetOrigin` serves the widget elsewhere.
+// sent as HTML); `gate` lets a test hold the controllers reply; `widgetOrigin` serves the widget
+// elsewhere; `css` is CNCjs's stylesheet, or null for one that fails to load.
 const idle = () => [{ port: 'COM7', workflow: { state: 'idle' } }];
 const reply = (route, body) => typeof body === 'string'
   ? route.fulfill({ contentType: 'text/html', body })
   : route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
 // Stands in for CNCjs's main.css: its page minimum width and a recognisable Bootstrap colour.
 const CNCJS_CSS = 'body{min-width:960px}.btn-primary{background-color:rgb(1, 2, 3)}';
-async function embedInCncjs({ controllers = idle, gcode = () => ({}), gate = async () => {}, widgetOrigin = 'http://cncjs.test' } = {}) {
+async function embedInCncjs({ controllers = idle, gcode = () => ({}), gate = async () => {}, widgetOrigin = 'http://cncjs.test', css = CNCJS_CSS } = {}) {
   const html = await readFile(new URL('../web/index.html', import.meta.url), 'utf8');
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 1100 } });
+  const consoleLines = [];
+  ctx.on('console', m => consoleLines.push(m.text()));
   const host = await ctx.newPage();
   const uploads = [];
   await ctx.route(/^http:\/\/(cncjs|widget)\.test\//, async route => {
     const url = new URL(route.request().url());
     if (url.pathname === '/conversational/') return route.fulfill({ contentType: 'text/html', body: html });
-    if (url.pathname === '/main.css') return route.fulfill({ contentType: 'text/css', body: CNCJS_CSS });
+    if (url.pathname === '/main.css') return css === null ? route.fulfill({ status: 404, body: '' }) : route.fulfill({ contentType: 'text/css', body: css });
     if (url.pathname === '/api/controllers') {
       await gate();
       return reply(route, controllers());
@@ -118,7 +138,7 @@ async function embedInCncjs({ controllers = idle, gcode = () => ({}), gate = asy
       });</script>` });
   });
   await host.goto('http://cncjs.test/');
-  return { ctx, w: host.frameLocator('iframe[name="w"]'), uploads };
+  return { ctx, w: host.frameLocator('iframe[name="w"]'), uploads, consoleLines };
 }
 
 test('embedded in CNCjs, Load sends the program to /api/gcode', async () => {
@@ -140,6 +160,19 @@ test('embedded in CNCjs, Load sends the program to /api/gcode', async () => {
     await w.getByText('Loaded circ.nc into CNCjs on COM7.').waitFor();
     await diameter.fill('30');
     await w.getByText('Port COM7: loading replaces the program loaded in CNCjs.').waitFor();
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('embedded in CNCjs, a CNCjs stylesheet that fails to load keeps the stand-in styles', async () => {
+  const { ctx, w, consoleLines } = await embedInCncjs({ css: null });
+  try {
+    for (let i = 0; i < 100 && !consoleLines.some(l => l.includes('keeping the stand-in')); i++) await new Promise(r => setTimeout(r, 50));
+    assert.ok(consoleLines.some(l => l.includes('keeping the stand-in')), 'no warning about the failed stylesheet');
+    assert.equal(await w.locator('#cncjs-fallback').count(), 1);
+    const load = w.getByRole('button', { name: 'Load in CNCjs' });
+    assert.equal(await load.evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(51, 122, 183)');
   } finally {
     await ctx.close();
   }

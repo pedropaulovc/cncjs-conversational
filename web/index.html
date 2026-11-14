@@ -69,7 +69,6 @@ h2 { margin: 0; font-size: 13px; font-weight: bold; line-height: 1.4; }
 .ops .btn.active svg { color: var(--path); }
 .btn-group.seg { display: flex; width: 100%; }
 .seg > .btn { flex: 1 1 0; min-width: 0; padding-left: 4px; padding-right: 4px; white-space: normal; }
-.setup[hidden] { display: none; }
 .setup p { margin: 4px 0 0; font-size: 12px; color: var(--ink-2); }
 .checks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .checks .alert { margin: 0; padding: 5px 8px; font-size: 12px; }
@@ -87,11 +86,10 @@ figcaption { font-size: 12px; color: var(--ink-2); }
 .fld input { width: calc(5ch + 8px); height: 20px; margin: 0; padding: 1px 3px; border: 1px solid var(--rule); border-radius: 3px; background: var(--field); color: var(--ink); font: 12px/1 var(--font-num); text-align: right; -moz-appearance: textfield; appearance: textfield; transition: border-color .12s, box-shadow .12s; }
 .fld input::-webkit-outer-spin-button, .fld input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .fld input:hover { border-color: var(--dim); }
-.fld input:focus { outline: 0; border-color: #66afe9; box-shadow: 0 0 0 2px rgba(102, 175, 233, .45); }
+.fld input:focus { outline: 2px solid transparent; border-color: #66afe9; box-shadow: 0 0 0 2px rgba(102, 175, 233, .45); }
 .fld .u { color: var(--ink-2); }
 .fld[data-state="warn"] input { border-color: var(--warn); color: var(--warn); }
 .fld[data-state="error"] input { border-color: var(--error); color: var(--error); background: var(--error-soft); }
-.fld[hidden] { display: none; }
 
 /* svg drafting */
 .stock { fill: var(--field); stroke: var(--ink); stroke-width: 1.4; }
@@ -290,9 +288,11 @@ for (const [id, v] of Object.entries(VIEWS)) {
 }
 
 // The column fixes the plan's width, so its height follows the stock: no empty bands round a long, thin bar.
+// It is refitted when the operation or a committed stock size changes, not per keystroke, so the sheet holds still while typing.
+const PLAN_M = { L: 64, R: 64, T: 40, B: 44 };
 function fitPlan() {
   const v = VIEWS.plan, VW = v.vb[0];
-  const h = Math.round(Math.min(Math.max(84 + st.stock.h * (VW - 128) / st.stock.w, 160), 300));
+  const h = Math.round(Math.min(Math.max(PLAN_M.T + PLAN_M.B + st.stock.h * (VW - PLAN_M.L - PLAN_M.R) / st.stock.w, 160), 300));
   if (h === v.vb[1]) return;
   v.vb[1] = h;
   v.el.style.aspectRatio = `${VW} / ${h}`;
@@ -322,6 +322,7 @@ function buildInputs() {
     });
     inp.addEventListener('focus', () => { active = p; render(); });
     inp.addEventListener('blur', () => { active = null; render(); });
+    if (p === 'stock.w' || p === 'stock.h') inp.addEventListener('change', () => { fitPlan(); render(); });
     inputs[p] = lab;
   }
 }
@@ -342,7 +343,7 @@ const at = (v, x, y) => ({ v, x, y });
 function planFrame() {
   const [VW, VH] = VIEWS.plan.vb;
   const { w: W, h: H } = st.stock;
-  const L = 64, R = 64, T = 40, B = 44;
+  const { L, R, T, B } = PLAN_M;
   const aw = VW - L - R, ah = VH - T - B;
   const s = Math.min(aw / W, ah / H);
   const ox = L + (aw - W * s) / 2, top = T + (ah - H * s) / 2, bot = top + H * s;
@@ -771,22 +772,20 @@ function drawSec(o, pos) {
 // ---------- tool views ----------
 function drawTool(o, pos) {
   const drill = st.op === 'bolt';
-  // drawn on a 300-wide layout, shifted left 40 to sit in the 320 sheet with room for the feeds
-  const t = [`<rect class="feat" x="132" y="12" width="36" height="62"/>`];
+  o.push(`<rect class="feat" x="92" y="12" width="36" height="62"/>`);
   if (drill) {
-    t.push(`<path class="feat" d="M137,74 V132 L150,148 L163,132 V74Z"/><path class="ctr" d="M137,90 L163,104 M137,108 L163,122"/>`);
+    o.push(`<path class="feat" d="M97,74 V132 L110,148 L123,132 V74Z"/><path class="ctr" d="M97,90 L123,104 M97,108 L123,122"/>`);
   } else {
-    t.push(`<path class="feat" d="M136,74 V142 H164 V74Z"/><path class="ctr" d="M136,84 L164,100 M136,104 L164,120 M136,124 L164,140"/>`);
-    t.push(g('tool.d', ext(136, 146, 136, 166) + ext(164, 146, 164, 166) + dl(136, 160, 164, 160) + ln('dl', 164, 160, 186, 160)));
+    o.push(`<path class="feat" d="M96,74 V142 H124 V74Z"/><path class="ctr" d="M96,84 L124,100 M96,104 L124,120 M96,124 L124,140"/>`);
+    o.push(g('tool.d', ext(96, 146, 96, 166) + ext(124, 146, 124, 166) + dl(96, 160, 124, 160) + ln('dl', 124, 160, 146, 160)));
     pos['tool.d'] = at('tool', 196, 160);
-    t.push(g('tool.feed', `<line class="dl" x1="184" y1="122" x2="232" y2="122" marker-end="url(#a)"/>`));
+    o.push(g('tool.feed', `<line class="dl" x1="144" y1="122" x2="192" y2="122" marker-end="url(#a)"/>`));
     pos['tool.feed'] = at('tool', 262, 122);
   }
-  t.push(g('tool.rpm', `<path class="dl" d="M124,28 A28,9 0 1 0 176,28" marker-end="url(#a)"/>`));
+  o.push(g('tool.rpm', `<path class="dl" d="M84,28 A28,9 0 1 0 136,28" marker-end="url(#a)"/>`));
   pos['tool.rpm'] = at('tool', 44, 30);
-  t.push(g('tool.plunge', `<line class="dl" x1="192" y1="36" x2="192" y2="84" marker-end="url(#a)"/>`));
+  o.push(g('tool.plunge', `<line class="dl" x1="152" y1="36" x2="152" y2="84" marker-end="url(#a)"/>`));
   pos['tool.plunge'] = at('tool', 238, 60);
-  o.push(`<g transform="translate(-40 0)">${t.join('')}</g>`);
 }
 
 function drawStep(o, pos) {
@@ -999,10 +998,61 @@ function paint(lines) {
   }).join('\n');
 }
 
+// ---------- dimension boxes ----------
+// Each box is centred on its dimension. Where that would leave its sketch or cover a box
+// placed before it (fields order: stock first, then the feature, then the tool), it moves to
+// the nearest free spot. All boxes are measured before any is moved: one layout per pass.
+const GAP = 2;
+let placedFor = null;
+function placeBoxes(pos = placedFor) {
+  if (!pos) return;
+  placedFor = pos;
+  const items = [];
+  for (const [p, el] of Object.entries(inputs)) {
+    const at = pos[p];
+    el.hidden = !at;
+    if (!at) continue;
+    const v = VIEWS[at.v];
+    if (el.parentNode !== v.ov) v.ov.append(el);
+    items.push({ el, at, v });
+  }
+  for (const it of items) Object.assign(it, { w: it.el.offsetWidth, h: it.el.offsetHeight, ow: it.v.ov.clientWidth, oh: it.v.ov.clientHeight });
+  const taken = new Map();
+  for (const it of items) {
+    const { at, v, w, h, ow, oh } = it;
+    // not laid out (a collapsed widget): keep the dimension's spot until the resize observer places it
+    if (!ow || !oh) { it.left = at.x / v.vb[0] * 100; it.top = at.y / v.vb[1] * 100; continue; }
+    if (!taken.has(v)) taken.set(v, []);
+    const rects = taken.get(v);
+    const free = (x, y) => x - w / 2 >= 0 && x + w / 2 <= ow && y - h / 2 >= 0 && y + h / 2 <= oh
+      && rects.every(r => x + w / 2 + GAP <= r.l || x - w / 2 - GAP >= r.r || y + h / 2 + GAP <= r.t || y - h / 2 - GAP >= r.b);
+    const x0 = Math.min(Math.max(at.x / v.vb[0] * ow, w / 2), ow - w / 2);
+    const y0 = Math.min(Math.max(at.y / v.vb[1] * oh, h / 2), oh - h / 2);
+    const [x, y] = nearestFree(x0, y0, free, Math.max(ow, oh)) ?? [x0, y0];
+    rects.push({ l: x - w / 2, r: x + w / 2, t: y - h / 2, b: y + h / 2 });
+    it.left = x / ow * 100;
+    it.top = y / oh * 100;
+  }
+  for (const it of items) {
+    it.el.style.left = `${it.left}%`;
+    it.el.style.top = `${it.top}%`;
+  }
+}
+// rings of growing distance, straight moves before diagonal ones
+function nearestFree(x, y, free, reach) {
+  for (let d = 0; d <= reach; d += 2) {
+    for (const [dx, dy] of [[0, d], [0, -d], [d, 0], [-d, 0]]) if (free(x + dx, y + dy)) return [x + dx, y + dy];
+    for (let k = 2; k < d; k += 2) {
+      for (const [dx, dy] of [[k, d], [-k, d], [k, -d], [-k, -d], [d, k], [d, -k], [-d, k], [-d, -k]]) if (free(x + dx, y + dy)) return [x + dx, y + dy];
+    }
+  }
+  return null;
+}
+new ResizeObserver(() => placeBoxes()).observe(document.querySelector('main'));
+
 // ---------- render ----------
 let current = [];
 function render() {
-  fitPlan();
   const out = { plan: [], sec: [], tool: [], step: [] };
   const pos = {};
   drawPlan(out.plan, pos);
@@ -1027,18 +1077,9 @@ function render() {
   const issues = check();
   const state = new Map();
   for (const i of issues) for (const f of i.f) if (state.get(f) !== 'error') state.set(f, i.lv);
+  placeBoxes(pos);
   for (const [p, el] of Object.entries(inputs)) {
-    const at = pos[p];
-    el.hidden = !at;
-    if (!at) continue;
-    const v = VIEWS[at.v];
-    if (el.parentNode !== v.ov) v.ov.append(el);
-    // keep the box inside its sketch: centred on its dimension where it fits, nudged in where it does not
-    const ow = v.ov.clientWidth, oh = v.ov.clientHeight, hw = el.offsetWidth / 2, hh = el.offsetHeight / 2;
-    const x = at.x / v.vb[0] * ow, y = at.y / v.vb[1] * oh;
-    el.style.left = ow ? `${Math.min(Math.max(x, hw), ow - hw) / ow * 100}%` : `${at.x / v.vb[0] * 100}%`;
-    el.style.top = oh ? `${Math.min(Math.max(y, hh), oh - hh) / oh * 100}%` : `${at.y / v.vb[1] * 100}%`;
-    if (!el.querySelector('input').matches(':invalid')) el.dataset.state = state.get(p) || '';
+    if (!el.hidden && !el.querySelector('input').matches(':invalid')) el.dataset.state = state.get(p) || '';
   }
 
   const ul = document.getElementById('checks');
@@ -1071,6 +1112,7 @@ function render() {
 function selectOp(op) {
   st.op = op;
   for (const b of document.querySelectorAll('#ops button')) press(b, b.dataset.op === op);
+  fitPlan();
   buildInputs();
   render();
 }
@@ -1120,16 +1162,21 @@ function adoptCncjsStyles() {
   const sheets = [...window.parent.document.querySelectorAll('link[rel="stylesheet"][href]')];
   if (!sheets.length) return;
   const fallback = document.getElementById('cncjs-fallback');
-  let pending = sheets.length;
+  // A sheet that fails to load keeps the stand-in, so the widget is never left unstyled.
+  let pending = sheets.length, failed = 0;
+  const settle = () => {
+    if (--pending) return;
+    if (failed) return console.warn(`cncjs-conversational: ${failed} CNCjs stylesheet(s) failed to load; keeping the stand-in styles.`);
+    fallback.remove();
+    render();
+  };
   for (const sheet of sheets) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = sheet.href;
-    link.addEventListener('load', () => {
-      if (--pending) return;
-      fallback.remove();
-      render();
-    });
+    if (sheet.media) link.media = sheet.media;
+    link.addEventListener('load', settle);
+    link.addEventListener('error', () => { failed++; link.remove(); settle(); });
     document.head.insertBefore(link, fallback);
   }
 }
