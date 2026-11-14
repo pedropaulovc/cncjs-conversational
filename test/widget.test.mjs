@@ -53,9 +53,12 @@ test('side face refuses a cut deeper than the stock', async () => {
 });
 
 // As the sidebar column shows it: no dimension box may cover another or hang outside its
-// sketch, and nothing may scroll sideways. Each case starts from a fresh page; besides every
-// operation's defaults it covers thin stock and features near the stock's edges.
-test('at CNCjs sidebar width, dimension boxes stay apart and inside their sketches', async () => {
+// sketch, none may stray far from the dimension it sets, and nothing may scroll sideways.
+// Each case starts from a fresh page; besides every operation's defaults it covers thin stock
+// and features near the stock's edges.
+// past this a misplaced anchor or an overcrowded sketch has pushed a box away from its dimension
+const MAX_STRAY = 24;
+test('at CNCjs sidebar width, dimension boxes stay apart, near their dimensions and inside their sketches', async () => {
   const cases = [
     ['Square up stock', '1: face top, cut sides'], ['Square up stock', '2: flip, face to thickness'],
     ['Face'], ['Side face', 'Front (Y−)'], ['Side face', 'Back (Y+)'], ['Side face', 'Left (X−)'], ['Side face', 'Right (X+)'],
@@ -72,30 +75,53 @@ test('at CNCjs sidebar width, dimension boxes stay apart and inside their sketch
   try {
     for (const [op, variant, values = {}] of cases) {
       const p = await ctx.newPage();
+      const pageErrors = [];
+      p.on('pageerror', e => pageErrors.push(e.message));
       await p.goto(page_url);
       await p.getByRole('button', { name: op, exact: true }).click();
       if (variant) await p.getByRole('button', { name: variant }).click();
       for (const [name, value] of Object.entries(values)) await p.getByRole('spinbutton', { name, exact: true }).fill(String(value));
-      const problems = await p.evaluate(() => {
+      const problems = await p.evaluate(maxStray => {
         const out = [];
         const doc = document.documentElement;
         if (doc.scrollWidth > doc.clientWidth) out.push(`page scrolls sideways (${doc.scrollWidth} > ${doc.clientWidth})`);
         const boxes = [...document.querySelectorAll('.fld:not([hidden])')].map(el => ({
-          name: el.querySelector('input').getAttribute('aria-label'), r: el.getBoundingClientRect(), v: el.closest('.view').getBoundingClientRect(),
+          el, name: el.querySelector('input').getAttribute('aria-label'), r: el.getBoundingClientRect(), v: el.closest('.view').getBoundingClientRect(),
         }));
-        for (const { name, r, v } of boxes) {
+        for (const { el, name, r, v } of boxes) {
           if (r.left < v.left - 0.5 || r.right > v.right + 0.5 || r.top < v.top - 0.5 || r.bottom > v.bottom + 0.5) out.push(`${name} leaves its sketch`);
+          const ov = el.parentNode.getBoundingClientRect();
+          const ax = ov.left + +el.dataset.ax, ay = ov.top + +el.dataset.ay;
+          const stray = Math.hypot(Math.max(r.left - ax, 0, ax - r.right), Math.max(r.top - ay, 0, ay - r.bottom));
+          if (stray > maxStray) out.push(`${name} is ${Math.round(stray)} px from its dimension`);
         }
         boxes.forEach((a, i) => boxes.slice(i + 1).forEach(b => {
           if (a.r.left < b.r.right && b.r.left < a.r.right && a.r.top < b.r.bottom && b.r.top < a.r.bottom) out.push(`${a.name} covers ${b.name}`);
         }));
         return out;
-      });
-      assert.deepEqual(problems, [], `${[op, variant].filter(Boolean).join(' / ')} ${JSON.stringify(values)}`);
+      }, MAX_STRAY);
+      assert.deepEqual([...pageErrors, ...problems], [], `${[op, variant].filter(Boolean).join(' / ')} ${JSON.stringify(values)}`);
       await p.close();
     }
   } finally {
     await ctx.close();
+  }
+});
+
+// Committing stock H fires `change` on the mousedown of the next click; the plan refit it
+// triggers must not move the clicked button out from under the mouseup.
+test('committing a stock size by clicking a button below the plan still clicks that button', async () => {
+  const p = await browser.newPage({ viewport: { width: 1440, height: 1400 } });
+  try {
+    await p.goto(page_url);
+    await p.getByRole('button', { name: 'Face', exact: true }).click();
+    await p.getByRole('spinbutton', { name: 'Stock height along Y', exact: true }).fill('140');
+    const download = p.waitForEvent('download', { timeout: 2000 });
+    await p.locator('#dl').click();
+    assert.equal((await download).suggestedFilename(), 'face.nc');
+    assert.ok(await p.locator('#v-plan').evaluate(el => el.getBoundingClientRect().height > 200), 'plan was not refitted to the taller stock');
+  } finally {
+    await p.close();
   }
 });
 
