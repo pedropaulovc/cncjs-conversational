@@ -70,6 +70,8 @@ h2 { margin: 0; font-size: 13px; font-weight: bold; line-height: 1.4; }
 .btn-group.seg { display: flex; width: 100%; }
 .seg > .btn { flex: 1 1 0; min-width: 0; padding-left: 4px; padding-right: 4px; white-space: normal; }
 .setup p { margin: 4px 0 0; font-size: 12px; color: var(--ink-2); }
+.units { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.units p { margin: 0; font-size: 12px; color: var(--ink-2); }
 .checks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .checks .alert { margin: 0; padding: 5px 8px; font-size: 12px; }
 
@@ -84,6 +86,8 @@ figcaption { font-size: 12px; color: var(--ink-2); }
 /* dimension text = input */
 .fld { position: absolute; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 2px; margin: 0; padding: 1px 2px; border-radius: 3px; background: var(--bg); color: var(--dim); font: 11px/1 Arial, "Helvetica Neue", Helvetica, sans-serif; font-weight: normal; white-space: nowrap; pointer-events: auto; }
 .fld input { width: calc(5ch + 8px); height: 20px; margin: 0; padding: 1px 3px; border: 1px solid var(--rule); border-radius: 3px; background: var(--field); color: var(--ink); font: 12px/1 var(--font-num); text-align: right; -moz-appearance: textfield; appearance: textfield; transition: border-color .12s, box-shadow .12s; }
+/* inch values carry a decimal more */
+html[data-units="in"] .fld input { width: calc(6ch + 8px); }
 .fld input::-webkit-outer-spin-button, .fld input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .fld input:hover { border-color: var(--dim); }
 .fld input:focus { outline: 2px solid transparent; border-color: #66afe9; box-shadow: 0 0 0 2px rgba(102, 175, 233, .45); }
@@ -136,7 +140,14 @@ pre .arc { color: var(--path); }
 <div class="app">
   <header>
     <h1>Conversational</h1>
-    <p class="text-muted">mm, G54 with X0 Y0 at the front-left corner and Z0 on top of stock, Grbl output.</p>
+    <p class="text-muted">G54 with X0 Y0 at the front-left corner and Z0 on top of stock, Grbl output.</p>
+    <div class="units">
+      <div class="btn-group" id="units" role="group" aria-label="Units">
+        <button class="btn btn-default btn-sm" data-units="mm">mm</button>
+        <button class="btn btn-default btn-sm" data-units="in">inch</button>
+      </div>
+      <p id="units-note"></p>
+    </div>
   </header>
 
   <div class="ops" id="ops" role="group" aria-label="Operation">
@@ -210,21 +221,47 @@ const VIEWS = {
   step: { vb: [320, 110] },
 };
 
-const st = {
-  op: 'square',
-  stock: { w: 100, h: 60, t: 20 },
-  safeZ: 5,
-  stepdown: 1.5,
-  tool: { d: 6.35, rpm: 12000, feed: 800, plunge: 200, step: 45 },
-  face: { depth: 0.5 },
-  rect: { cx: 50, cy: 30, w: 50, l: 30, r: 6, depth: 6 },
-  circ: { cx: 50, cy: 30, d: 40, depth: 6 },
-  bolt: { cx: 50, cy: 30, bcd: 40, n: 6, a0: 0, hd: 5, depth: 8, peck: 2 },
-  sq: { setup: 1, w: 90, h: 50, t: 16, top: 1, wall: 17, stick: 18 },
-  side: { side: 'y-', amt: 3, depth: 12 },
+// Units the sketch, the boxes and the program are in. `perMM` converts from mm; the other
+// lengths are the program's fixed moves and the checks' limits, picked as round numbers in each.
+const UNITS = {
+  mm: { code: 'G21', len: 'mm', feed: 'mm/min', name: 'millimetres', perMM: 1, dp: 3, step: 0.1, feedStep: 10,
+    retract: 1, overrun: 2, peckBack: 0.5, lipExtra: 0.2, faceMax: 1, allowMin: 0.2, jawGap: 0.5, safeMin: 1, rapid: 3000 },
+  in: { code: 'G20', len: 'in', feed: 'in/min', name: 'inches', perMM: 1 / 25.4, dp: 4, step: 0.01, feedStep: 1,
+    retract: 0.04, overrun: 0.08, peckBack: 0.02, lipExtra: 0.008, faceMax: 0.04, allowMin: 0.008, jawGap: 0.02, safeMin: 0.04, rapid: 120 },
 };
 
-// t: visible dimension text, a: accessible name, u: unit suffix
+// Inch defaults cover only lengths and feeds: switching units takes those from here unless edited.
+const DEFAULTS = {
+  mm: {
+    stock: { w: 100, h: 60, t: 20 },
+    safeZ: 5,
+    stepdown: 1.5,
+    tool: { d: 6.35, rpm: 12000, feed: 800, plunge: 200, step: 45 },
+    face: { depth: 0.5 },
+    rect: { cx: 50, cy: 30, w: 50, l: 30, r: 6, depth: 6 },
+    circ: { cx: 50, cy: 30, d: 40, depth: 6 },
+    bolt: { cx: 50, cy: 30, bcd: 40, n: 6, a0: 0, hd: 5, depth: 8, peck: 2 },
+    sq: { setup: 1, w: 90, h: 50, t: 16, top: 1, wall: 17, stick: 18 },
+    side: { side: 'y-', amt: 3, depth: 12 },
+  },
+  in: {
+    stock: { w: 4, h: 2.5, t: 0.75 },
+    safeZ: 0.2,
+    stepdown: 0.06,
+    tool: { d: 0.25, feed: 30, plunge: 8 },
+    face: { depth: 0.02 },
+    rect: { cx: 2, cy: 1.25, w: 2, l: 1.25, r: 0.25, depth: 0.25 },
+    circ: { cx: 2, cy: 1.25, d: 1.5, depth: 0.25 },
+    bolt: { cx: 2, cy: 1.25, bcd: 1.5, hd: 0.2, depth: 0.3, peck: 0.08 },
+    sq: { w: 3.5, h: 2, t: 0.625, top: 0.04, wall: 0.65, stick: 0.7 },
+    side: { amt: 0.12, depth: 0.5 },
+  },
+};
+
+const st = { op: 'square', units: 'mm', ...structuredClone(DEFAULTS.mm) };
+const U = () => UNITS[st.units];
+
+// t: visible dimension text, a: accessible name, u: unit suffix, dim: 'feed' or 'none' (a length when absent)
 const F = {
   'stock.w': { t: 'W', a: 'Stock width along X', min: 1 },
   'stock.h': { t: 'H', a: 'Stock height along Y', min: 1 },
@@ -238,8 +275,8 @@ const F = {
   'circ.cx': { t: 'X', a: 'Pocket centre X' }, 'circ.cy': { t: 'Y', a: 'Pocket centre Y' },
   'circ.d': { t: 'Ø', a: 'Pocket diameter', min: 0.1 }, 'circ.depth': { t: 'depth', a: 'Pocket depth', min: 0.01 },
   'bolt.cx': { t: 'X', a: 'Bolt circle centre X' }, 'bolt.cy': { t: 'Y', a: 'Bolt circle centre Y' },
-  'bolt.bcd': { t: 'Ø', a: 'Bolt circle diameter', min: 0.1 }, 'bolt.n': { t: '×', a: 'Hole count', min: 1, step: 1 },
-  'bolt.a0': { t: '∠', a: 'Start angle from +X', u: '°', step: 5 }, 'bolt.hd': { t: 'Ø', a: 'Drill diameter', min: 0.1 },
+  'bolt.bcd': { t: 'Ø', a: 'Bolt circle diameter', min: 0.1 }, 'bolt.n': { t: '×', a: 'Hole count', min: 1, step: 1, dim: 'none' },
+  'bolt.a0': { t: '∠', a: 'Start angle from +X', u: '°', step: 5, dim: 'none' }, 'bolt.hd': { t: 'Ø', a: 'Drill diameter', min: 0.1 },
   'bolt.depth': { t: 'depth', a: 'Hole depth to drill tip', min: 0.01 }, 'bolt.peck': { t: 'peck', a: 'Peck depth', min: 0.05 },
   'sq.w': { t: 'W', a: 'Finished width', min: 0.1 }, 'sq.h': { t: 'H', a: 'Finished height', min: 0.1 },
   'sq.t': { t: 'T', a: 'Finished thickness', min: 0.1 }, 'sq.top': { t: 'top', a: 'Take off the top in setup 1', min: 0 },
@@ -247,10 +284,10 @@ const F = {
   'side.amt': { t: 'remove', a: 'Material to remove from the side', min: 0.01 },
   'side.depth': { t: 'depth', a: 'Side depth below Z0', min: 0.01 },
   'tool.d': { t: 'Ø', a: 'Tool diameter', min: 0.1 },
-  'tool.rpm': { t: 'S', a: 'Spindle speed', u: 'rpm', step: 100, min: 1 },
-  'tool.feed': { t: 'F', a: 'Cutting feed', u: 'mm/min', step: 10, min: 1 },
-  'tool.plunge': { t: 'F', a: 'Plunge feed', u: 'mm/min', step: 10, min: 1 },
-  'tool.step': { t: '', a: 'Stepover percent of tool diameter', u: '%', step: 1, min: 1, max: 100 },
+  'tool.rpm': { t: 'S', a: 'Spindle speed', u: 'rpm', step: 100, min: 1, dim: 'none' },
+  'tool.feed': { t: 'F', a: 'Cutting feed', min: 1, dim: 'feed' },
+  'tool.plunge': { t: 'F', a: 'Plunge feed', min: 1, dim: 'feed' },
+  'tool.step': { t: '', a: 'Stepover percent of tool diameter', u: '%', step: 1, min: 1, max: 100, dim: 'none' },
 };
 
 const COMMON = ['stock.w', 'stock.h', 'stock.t', 'safeZ'];
@@ -264,12 +301,19 @@ const OPS = {
   bolt: { name: 'Bolt circle', fields: [...COMMON, 'bolt.cx', 'bolt.cy', 'bolt.bcd', 'bolt.n', 'bolt.a0', 'bolt.hd', 'bolt.depth', 'bolt.peck', 'tool.rpm', 'tool.plunge'] },
 };
 
-const get = p => p.split('.').reduce((o, k) => o[k], st);
+const pick = (o, p) => p.split('.').reduce((x, k) => x[k], o);
+const get = p => pick(st, p);
 const set = (p, v) => { const k = p.split('.'); const last = k.pop(); k.reduce((o, x) => o[x], st)[last] = v; };
+// mins are written in mm; a box is bad when its text is not a number in range
+const limits = p => { const f = F[p]; return { min: f.min == null ? null : f.dim === 'none' ? f.min : f.min * U().perMM, max: f.max }; };
+const bad = (p, v) => { const { min, max } = limits(p); return !Number.isFinite(v) || (min != null && v < min) || (max != null && v > max); };
+// boxes the user has typed in keep their value (converted) when the units change; the rest take that unit's default
+const edited = new Set();
 // pressed state for toggle buttons: Bootstrap's look (.active) and its accessible state
 const press = (b, on) => { b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); };
 const n2 = v => +v.toFixed(2);
-const fmt = v => String(Math.round(v * 1000) / 1000);
+const round = (v, dp) => Math.round(v * 10 ** dp) / 10 ** dp;
+const fmt = v => String(round(v, U().dp));
 const rad = d => d * Math.PI / 180;
 
 // ---------- view scaffolding ----------
@@ -323,15 +367,18 @@ function buildInputs() {
     const f = F[p];
     const lab = document.createElement('label');
     lab.className = 'fld';
-    lab.innerHTML = `${f.t ? `<span>${f.t}</span>` : ''}<input type="number" inputmode="decimal" aria-label="${f.a}" step="${f.step ?? 0.1}" ${f.min != null ? `min="${f.min}"` : ''} ${f.max != null ? `max="${f.max}"` : ''}>${f.u ? `<span class="u">${f.u}</span>` : ''}`;
+    const { min, max } = limits(p);
+    const step = f.step ?? (f.dim === 'feed' ? U().feedStep : U().step);
+    const u = f.dim === 'feed' ? U().feed : f.u;
+    lab.innerHTML = `${f.t ? `<span>${f.t}</span>` : ''}<input type="number" inputmode="decimal" aria-label="${f.a}" step="${step}" ${min != null ? `min="${min}"` : ''} ${max != null ? `max="${max}"` : ''}>${u ? `<span class="u">${u}</span>` : ''}`;
     const inp = lab.querySelector('input');
     inp.value = get(p);
     inp.addEventListener('input', () => {
       const v = parseFloat(inp.value);
-      const bad = !Number.isFinite(v) || (f.min != null && v < f.min) || (f.max != null && v > f.max);
-      lab.dataset.state = bad ? 'error' : '';
-      if (bad) return;
+      lab.dataset.state = bad(p, v) ? 'error' : '';
+      if (bad(p, v)) return;
       set(p, p === 'bolt.n' ? Math.max(1, Math.round(v)) : v);
+      edited.add(p);
       render();
     });
     inp.addEventListener('focus', () => { active = p; render(); });
@@ -339,6 +386,21 @@ function buildInputs() {
     if (p === 'stock.w' || p === 'stock.h') inp.addEventListener('change', refitPlan);
     inputs[p] = lab;
   }
+}
+
+// Lengths and feeds the user typed are converted; the others take the new unit's defaults.
+function setUnits(next) {
+  if (next === st.units) return;
+  const k = UNITS[next].perMM / U().perMM;
+  for (const [p, f] of Object.entries(F)) {
+    if (f.dim === 'none') continue;
+    set(p, edited.has(p) ? round(get(p) * k, UNITS[next].dp) : pick(DEFAULTS[next], p));
+  }
+  st.units = next;
+  document.documentElement.dataset.units = next;
+  fitPlan();
+  buildInputs();
+  render();
 }
 
 // ---------- svg helpers ----------
@@ -372,15 +434,15 @@ function secFrame(span, L = 78, R = 62) {
   return { s, ox: L, X: x => L + x * s, zs: T => Math.min(140 / T, s * 10) };
 }
 
-// ---------- toolpath geometry (mm), shared by sketch and G-code ----------
+// ---------- toolpath geometry (in st.units), shared by sketch and G-code ----------
 const tR = () => st.tool.d / 2;
-const stepMM = () => st.tool.d * st.tool.step / 100;
+const stepLen = () => st.tool.d * st.tool.step / 100;
 const levels = (depth, sd) => { const z = []; for (let d = sd; d < depth - 1e-6; d += sd) z.push(-d); z.push(-depth); return z; };
 
 function circRings() {
   const R = st.circ.d / 2 - tR();
   const rs = [];
-  for (let r = R; r > 1e-6; r -= stepMM()) rs.unshift(r);
+  for (let r = R; r > 1e-6; r -= stepLen()) rs.unshift(r);
   return rs;
 }
 
@@ -388,16 +450,16 @@ function rectLoops() {
   const { w, l, r } = st.rect;
   const hw = w / 2 - tR(), hh = l / 2 - tR(), rc = Math.max(Math.min(r, w / 2, l / 2) - tR(), 0);
   const loops = [];
-  for (let k = 0; hw - k * stepMM() > 1e-6 && hh - k * stepMM() > 1e-6; k++) {
-    loops.unshift({ hw: hw - k * stepMM(), hh: hh - k * stepMM(), rc: Math.max(rc - k * stepMM(), 0) });
+  for (let k = 0; hw - k * stepLen() > 1e-6 && hh - k * stepLen() > 1e-6; k++) {
+    loops.unshift({ hw: hw - k * stepLen(), hh: hh - k * stepLen(), rc: Math.max(rc - k * stepLen(), 0) });
   }
   return loops;
 }
 
 function rasterPasses(x0, x1, y0, y1) {
   const ys = [];
-  for (let y = y1 + tR() - stepMM(); ; y -= stepMM()) { ys.push(y); if (y - tR() <= y0) break; }
-  return { ys, xa: x0 - tR() - 2, xb: x1 + tR() + 2 };
+  for (let y = y1 + tR() - stepLen(); ; y -= stepLen()) { ys.push(y); if (y - tR() <= y0) break; }
+  return { ys, xa: x0 - tR() - U().overrun, xb: x1 + tR() + U().overrun };
 }
 const facePasses = () => rasterPasses(0, st.stock.w, 0, st.stock.h);
 
@@ -409,12 +471,12 @@ function sqGeom() {
   const tc = T - top;          // thickness after setup 1
   const face2 = tc - t;        // taken off in setup 2
   const lip = tc - wall;       // raw-width band left after setup 1, measured down from the setup-2 top
-  const lipCut = lip > face2 + 1e-6 ? lip + 0.2 : 0;
+  const lipCut = lip > face2 + 1e-6 ? lip + U().lipExtra : 0;
   return { W, H, T, w, h, t, top, wall, stick, ax, ay, allow: Math.max(ax, ay, 0), tc, face2, lip, lipCut };
 }
 function contourOffsets(allow) {
   const o = [];
-  for (let k = allow; k > 1e-6; k -= stepMM()) o.push(k);
+  for (let k = allow; k > 1e-6; k -= stepLen()) o.push(k);
   o.push(0);
   return o;
 }
@@ -431,9 +493,10 @@ function sideGeom() {
   }[side];
   // clockwise around the part = climb with M3
   const climbPlus = side === 'y+' || side === 'x-';
-  const ends = climbPlus ? [-tR() - 2, len + tR() + 2] : [len + tR() + 2, -tR() - 2];
+  const run = U().overrun;
+  const ends = climbPlus ? [-tR() - run, len + tR() + run] : [len + tR() + run, -tR() - run];
   // equal radial passes no wider than the stepover
-  const n = Math.max(1, Math.ceil(amt / stepMM() - 1e-6));
+  const n = Math.max(1, Math.ceil(amt / stepLen() - 1e-6));
   const ks = Array.from({ length: n }, (_, i) => amt * (i + 1) / n);
   const passes = ks.map(k => ({ a: map(ends[0], k - tR()), b: map(ends[1], k - tR()) }));
   return { W, H, side, amt, depth, len, span, map, passes };
@@ -831,23 +894,24 @@ function check() {
     if (out(cx - w / 2, cx + w / 2, cy - l / 2, cy + l / 2)) add('warn', 'Pocket breaks out of the stock.', 'rect.cx', 'rect.cy', 'rect.w', 'rect.l');
     if (depth >= T) add('error', 'Depth goes through the stock.', 'rect.depth', 'stock.t');
   }
-  if (st.op === 'face' && st.face.depth > 1) add('warn', 'More than 1 mm in a single facing pass.', 'face.depth');
+  const u = U();
+  if (st.op === 'face' && st.face.depth > u.faceMax) add('warn', `More than ${fmt(u.faceMax)} ${u.len} in a single facing pass.`, 'face.depth');
   if (st.op === 'square') {
     const q = sqGeom(), one = st.sq.setup === 1;
     if (q.w > q.W || q.h > q.H) add('error', 'Finished size is larger than the raw stock.', 'sq.w', 'sq.h', 'stock.w', 'stock.h');
-    else if (q.allow < 0.2) add('warn', 'Under 0.2 mm per side to clean up.', 'sq.w', 'sq.h');
+    else if (q.allow < u.allowMin) add('warn', `Under ${fmt(u.allowMin)} ${u.len} per side to clean up.`, 'sq.w', 'sq.h');
     if (q.t > q.tc) add('error', 'Finished T is thicker than the stock left after setup 1.', 'sq.t', 'sq.top', 'stock.t');
     if (q.stick >= q.T) add('error', 'Height above the jaws is more than the stock thickness.', 'sq.stick', 'stock.t');
-    if (one && q.wall > q.stick - 0.5) add('error', 'Side cut reaches the vise jaws: cut shallower or raise the stock.', 'sq.wall', 'sq.stick');
-    if (one && q.lipCut) add('warn', `Sides cut ${fmt(q.wall)} of ${fmt(q.t)} mm: setup 2 will contour the leftover lip.`, 'sq.wall');
-    if (!one && q.lipCut > q.stick - 0.5) add('error', 'Leftover lip sits below the jaws: cut deeper sides in setup 1.', 'sq.wall', 'sq.stick');
+    if (one && q.wall > q.stick - u.jawGap) add('error', 'Side cut reaches the vise jaws: cut shallower or raise the stock.', 'sq.wall', 'sq.stick');
+    if (one && q.lipCut) add('warn', `Sides cut ${fmt(q.wall)} of ${fmt(q.t)} ${u.len}: setup 2 will contour the leftover lip.`, 'sq.wall');
+    if (!one && q.lipCut > q.stick - u.jawGap) add('error', 'Leftover lip sits below the jaws: cut deeper sides in setup 1.', 'sq.wall', 'sq.stick');
   }
   if (st.op === 'side') {
     const q = sideGeom();
     if (q.amt >= q.span) add('error', 'Removing more than the stock is wide across this side.', 'side.amt');
     else if (q.amt > st.tool.d) add('warn', 'More than one tool Ø off the side: consider pocketing or a roughing pass.', 'side.amt', 'tool.d');
     if (q.depth > st.stock.t) add('error', 'Side depth is deeper than the stock.', 'side.depth', 'stock.t');
-    else if (q.depth > st.stock.t - 0.5) add('warn', 'Full-height side: raise the stock so the tool clears the vise jaws and parallels.', 'side.depth');
+    else if (q.depth > st.stock.t - u.jawGap) add('warn', 'Full-height side: raise the stock so the tool clears the vise jaws and parallels.', 'side.depth');
   }
   if (st.op === 'bolt') {
     const { bcd, n, hd, depth, cx, cy } = st.bolt;
@@ -856,7 +920,7 @@ function check() {
     if (depth >= T) add('warn', 'Holes go through the stock: check what is underneath.', 'bolt.depth', 'stock.t');
   }
   if (st.op !== 'bolt' && st.op !== 'face' && st.stepdown > st.tool.d) add('warn', 'Step down deeper than tool Ø.', 'stepdown', 'tool.d');
-  if (st.safeZ < 1) add('warn', 'Clearance under 1 mm above the stock.', 'safeZ');
+  if (st.safeZ < u.safeMin) add('warn', `Clearance under ${fmt(u.safeMin)} ${u.len} above the stock.`, 'safeZ');
   return I;
 }
 
@@ -867,9 +931,11 @@ function header(lines) {
   lines.push(`(${OPS[st.op].name}${st.op === 'square' ? `, setup ${st.sq.setup} of 2` : ''}, generated by cncjs-conversational)`,
     `(stock ${fmt(w)} x ${fmt(h)} x ${fmt(t)}, X0 Y0 ${sq2 ? 'finished front-left' : 'front-left'}, Z0 top)`,
     st.op === 'bolt' ? `(drill Ø${fmt(st.bolt.hd)})` : `(flat end mill Ø${fmt(st.tool.d)}, stepover ${fmt(st.tool.step)}%)`,
-    'G21 G90 G17 G94', 'G54', `M3 S${fmt(st.tool.rpm)}`, `G0 Z${fmt(st.safeZ)}`);
+    `${U().code} G90 G17 G94`, 'G54', `M3 S${fmt(st.tool.rpm)}`, `G0 Z${fmt(st.safeZ)}`);
 }
 function footer(lines) { lines.push(`G0 Z${fmt(st.safeZ)}`, 'M5', 'M30'); }
+// just above the stock, for moves between passes
+const retract = () => `G0 Z${fmt(U().retract)}`;
 
 function faceCode(L, { ys, xa, xb }, zs) {
   for (const z of zs) {
@@ -878,7 +944,7 @@ function faceCode(L, { ys, xa, xb }, zs) {
       if (i) L.push(`G1 Y${fmt(y)}`);
       L.push(`G1 X${fmt(i % 2 ? xa : xb)}${i ? '' : ` F${fmt(st.tool.feed)}`}`);
     });
-    L.push('G0 Z1');
+    L.push(retract());
   }
 }
 
@@ -897,7 +963,7 @@ function contourCode(L, x0, y0, x1, y1, offs, zs) {
         `G1 ${P(x1 + d, y0)}`, `G2 ${P(x1, y0 - d)} I${fmt(-d)} J0`,
         `G1 ${P(xm, y0 - d)}`);
     });
-    L.push('G0 Z1');
+    L.push(retract());
   }
 }
 
@@ -925,13 +991,13 @@ const GEN = {
     for (const z of levels(q.depth, st.stepdown)) {
       L.push(`(level Z${fmt(z)})`);
       q.passes.forEach((p, i) => {
-        L.push(`G0 ${P(p.a)}`, `G1 Z${fmt(z)} F${fmt(st.tool.plunge)}`, `G1 ${P(p.b)}${i ? '' : ` F${fmt(st.tool.feed)}`}`, 'G0 Z1');
+        L.push(`G0 ${P(p.a)}`, `G1 Z${fmt(z)} F${fmt(st.tool.plunge)}`, `G1 ${P(p.b)}${i ? '' : ` F${fmt(st.tool.feed)}`}`, retract());
       });
     }
   },
   circ(L) {
     const { cx, cy, depth } = st.circ;
-    L.push(`G0 X${fmt(cx)} Y${fmt(cy)}`, `G0 Z1`);
+    L.push(`G0 X${fmt(cx)} Y${fmt(cy)}`, retract());
     for (const z of levels(depth, st.stepdown)) {
       L.push(`(level Z${fmt(z)})`, `G1 Z${fmt(z)} F${fmt(st.tool.plunge)}`);
       circRings().forEach((r, i) => {
@@ -944,7 +1010,7 @@ const GEN = {
     const { cx, cy, depth } = st.rect;
     const loops = rectLoops();
     if (!loops.length) return;
-    L.push(`G0 X${fmt(cx)} Y${fmt(cy - loops[0].hh)}`, 'G0 Z1');
+    L.push(`G0 X${fmt(cx)} Y${fmt(cy - loops[0].hh)}`, retract());
     for (const z of levels(depth, st.stepdown)) {
       L.push(`(level Z${fmt(z)})`, `G1 X${fmt(cx)} Y${fmt(cy - loops[0].hh)}`, `G1 Z${fmt(z)} F${fmt(st.tool.plunge)}`);
       loops.forEach(({ hw, hh, rc }, i) => {
@@ -966,11 +1032,11 @@ const GEN = {
     // Grbl has no canned cycles, so pecks are expanded
     const { depth, peck } = st.bolt;
     boltHoles().forEach((h, i) => {
-      L.push(`(hole ${i + 1})`, `G0 X${fmt(h.x)} Y${fmt(h.y)}`, 'G0 Z1');
+      L.push(`(hole ${i + 1})`, `G0 X${fmt(h.x)} Y${fmt(h.y)}`, retract());
       for (let cur = 0; cur > -depth + 1e-6;) {
         const next = Math.max(cur - peck, -depth);
-        if (cur < 0) L.push(`G0 Z${fmt(cur + 0.5)}`);
-        L.push(`G1 Z${fmt(next)} F${fmt(st.tool.plunge)}`, 'G0 Z1');
+        if (cur < 0) L.push(`G0 Z${fmt(cur + U().peckBack)}`);
+        L.push(`G1 Z${fmt(next)} F${fmt(st.tool.plunge)}`, retract());
         cur = next;
       }
     });
@@ -978,7 +1044,7 @@ const GEN = {
 };
 
 function estimate(lines) {
-  const RAPID = 3000;
+  const RAPID = U().rapid;
   let p = { X: 0, Y: 0, Z: st.safeZ }, mode = 0, F = 0, t = 0, cut = 0;
   for (const raw of lines) {
     const l = raw.replace(/\(.*?\)/g, '');
@@ -1089,15 +1155,21 @@ function render() {
   sideEl.hidden = st.op !== 'side';
   for (const b of sideEl.querySelectorAll('button')) press(b, b.dataset.side === st.side.side);
   document.getElementById('setup-note').textContent = st.sq.setup === 1
-    ? `Clamp the raw stock ${fmt(st.sq.stick)} mm above the jaws. Probe X0 Y0 on the raw front-left corner, Z0 on top.`
-    : `Flip the part and clamp on the finished sides, ${fmt(st.sq.stick)} mm above the jaws. Probe X0 Y0 on the finished front-left corner, Z0 on top.`;
+    ? `Clamp the raw stock ${fmt(st.sq.stick)} ${U().len} above the jaws. Probe X0 Y0 on the raw front-left corner, Z0 on top.`
+    : `Flip the part and clamp on the finished sides, ${fmt(st.sq.stick)} ${U().len} above the jaws. Probe X0 Y0 on the finished front-left corner, Z0 on top.`;
+  const following = cnc.units !== null;
+  for (const b of document.querySelectorAll('#units button')) {
+    press(b, b.dataset.units === st.units);
+    b.disabled = following;
+  }
+  document.getElementById('units-note').textContent = following ? `${UNITS[st.units].code}, as set on ${cnc.port}` : '';
 
   const issues = check();
   const state = new Map();
   for (const i of issues) for (const f of i.f) if (state.get(f) !== 'error') state.set(f, i.lv);
   placeBoxes(pos);
   for (const [p, el] of Object.entries(inputs)) {
-    if (!el.hidden && !el.querySelector('input').matches(':invalid')) el.dataset.state = state.get(p) || '';
+    if (!el.hidden && !bad(p, parseFloat(el.querySelector('input').value))) el.dataset.state = state.get(p) || '';
   }
 
   const ul = document.getElementById('checks');
@@ -1122,7 +1194,7 @@ function render() {
   pre.innerHTML = paint(current);
   const e = estimate(current);
   const m = Math.floor(e.min), s = Math.round((e.min - m) * 60);
-  stats.innerHTML = `<b>${current.length}</b> lines, <b>${Math.round(e.cut)}</b> mm of feed moves, about <b>${m} min ${s} s</b> at the programmed feeds`;
+  stats.innerHTML = `<b>${current.length}</b> lines, <b>${Math.round(e.cut)}</b> ${U().len} of feed moves, about <b>${m} min ${s} s</b> at the programmed feeds`;
   updateLoad();
 }
 
@@ -1149,6 +1221,10 @@ document.getElementById('sidepick').addEventListener('click', e => {
   if (!b) return;
   st.side.side = b.dataset.side;
   render();
+});
+document.getElementById('units').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (b) setUnits(b.dataset.units);
 });
 document.getElementById('copy').addEventListener('click', async e => {
   await navigator.clipboard.writeText(current.join('\n') + '\n');
@@ -1200,8 +1276,9 @@ function adoptCncjsStyles() {
 }
 // load.state: idle | loading | loaded | refused | failed. `program` is the text that was sent;
 // `editedTo` is the editor's text when the outcome arrived, if it had already changed.
+// `units` is the open port's units mode as CNCjs last reported it, null while unknown.
 const NO_LOAD = { state: 'idle', message: '', program: '', editedTo: null };
-const cnc = { token, port: null, load: NO_LOAD };
+const cnc = { token, port: null, units: null, load: NO_LOAD };
 const programName = () => `${st.op}${st.op === 'square' ? `-setup${st.sq.setup}` : st.op === 'side' ? `-${st.side.side}` : ''}.nc`;
 const programText = () => current.length ? current.join('\n') + '\n' : '';
 const setLoad = (state, message, program) => {
@@ -1241,9 +1318,35 @@ async function cncjsApi(path, init = {}) {
   return body;
 }
 
+// Where CNCjs's /api/controllers keeps a controller's modal units: Grbl and Smoothie under
+// parserstate, Marlin directly in its state, TinyG in its status report.
+const MODAL_UNITS = { G20: 'in', G21: 'mm' };
+function machineUnits(controllers, port) {
+  const s = Array.isArray(controllers) ? controllers.find(c => c?.port === port)?.controller?.state : null;
+  return MODAL_UNITS[s?.parserstate?.modal?.units ?? s?.modal?.units ?? s?.sr?.modal?.units] ?? null;
+}
+function followMachine(units) {
+  cnc.units = units;
+  if (units && units !== st.units) return setUnits(units);
+  render();
+}
+// CNCjs refreshes Grbl's parser state ($G) every half second while idle, so a second's poll
+// follows a G20 or G21 typed into the console. A failed poll keeps what was known.
+async function watchMachineUnits() {
+  for (;;) {
+    const port = cnc.port;
+    if (port && !document.hidden) {
+      const units = await cncjsApi('/api/controllers').then(c => machineUnits(c, port), () => cnc.units);
+      if (port === cnc.port && units !== cnc.units) followMachine(units);
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+}
+
 async function loadIntoCncjs() {
   // Snapshot what is being sent; the port and the editor may change while waiting.
-  const port = cnc.port, name = programName(), program = programText();
+  const port = cnc.port;
+  let name = programName(), program = programText(), switched = '';
   setLoad('loading', `Loading ${name}…`, program);
   try {
     // gcode:load stops CNCjs's workflow, so only load when nothing is running or paused,
@@ -1253,8 +1356,18 @@ async function loadIntoCncjs() {
     const workflow = controllers.find(c => c?.port === port)?.workflow?.state;
     if (!workflow) return setLoad('failed', `Not loaded: ${port} is not open in CNCjs.`, program);
     if (workflow !== 'idle') return setLoad('refused', `Not loaded: a program is ${workflow} on ${port}. Stop it in CNCjs first.`, program);
+    // The machine may have changed units since the program was generated: regenerate in its units.
+    const units = machineUnits(controllers, port);
+    if (units && units !== st.units) {
+      followMachine(units);
+      name = programName();
+      program = programText();
+      switched = ` in ${UNITS[units].name}: ${port} switched to ${UNITS[units].code}`;
+      if (!program) return setLoad('failed', `Not loaded: ${port} switched to ${UNITS[units].code} and the program in ${UNITS[units].name} has errors.`, program);
+    }
+    if (units && cnc.units !== units) followMachine(units);
     await cncjsApi('/api/gcode', { method: 'POST', body: JSON.stringify({ port, name, gcode: program }) });
-    setLoad('loaded', `Loaded ${name} into CNCjs on ${port}.`, program);
+    setLoad('loaded', `Loaded ${name} into CNCjs on ${port}${switched}.`, program);
   } catch (error) {
     setLoad('failed', `Not loaded: ${error.message}`, program);
   }
@@ -1268,12 +1381,14 @@ if (embedding === 'cncjs') {
     if (typeof msg.token === 'string' && msg.token) cnc.token = msg.token;
     const a = msg.action || {};
     if (a.type !== 'change' || !a.payload || !Object.hasOwn(a.payload, 'port')) return;
+    if (cnc.port !== (a.payload.port || null)) cnc.units = null;
     cnc.port = a.payload.port || null;
     if (cnc.load.state !== 'loading') cnc.load = NO_LOAD;
-    updateLoad();
+    render();
   });
   document.getElementById('load').addEventListener('click', loadIntoCncjs);
   window.parent.postMessage({ token: cnc.token, action: { type: 'connect' } }, location.origin);
+  watchMachineUnits();
 }
 selectOp(st.op);
 </script>
