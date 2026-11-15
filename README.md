@@ -13,8 +13,9 @@ The widget works in millimetres (G21) or inches (G20). With a port open in
 CNCjs it follows the machine's units mode as CNCjs reports it, switching when a
 G20 or G21 is sent from the console; otherwise the **mm**/**inch** switch picks.
 The **mm**/**inch** switch converts the values you typed and gives the rest that
-unit's defaults; so does the machine's first report after a port opens. A later
-switch on the machine converts every value, so the part keeps its size. If the
+unit's defaults; so does the first units report from a machine. Every later
+switch on the machine, a reopened port included, converts every value, so the
+part keeps its size. If the
 machine changed units after the program was generated, **Load in CNCjs**
 regenerates it in the machine's units before sending it, or refuses if the
 program changed while it was checking. The program sets its units on its first
