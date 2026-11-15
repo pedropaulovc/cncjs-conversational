@@ -4,10 +4,12 @@
 
 - Programs in inches (G20) as well as millimetres (G21). With a port open in
   CNCjs, the widget follows the machine's units mode, polling CNCjs once a
-  second; otherwise an mm/inch switch picks. Typed values are converted on a
-  switch and the rest take inch or mm defaults. Load regenerates the program if
-  the machine changed units since it was generated. Retracts, overruns and
-  check limits use round values in each unit instead of fixed millimetres.
+  second; otherwise an mm/inch switch picks. The switch, like the machine's
+  first report after a port opens, converts typed values and gives the rest
+  that unit's defaults; later machine switches convert every value so the part
+  keeps its size. Load regenerates the program if the machine changed units
+  since it was generated. Retracts, overruns and check limits use round values
+  in each unit instead of fixed millimetres.
 - One column at the width of CNCjs's sidebars (340 px) instead of three, with
   the sketches redrawn 1:1 for that width so their text and number boxes stay
   readable. A number box that would cover another or leave its sketch moves to

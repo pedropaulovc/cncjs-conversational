@@ -267,12 +267,13 @@ test('embedded in CNCjs, the widget follows the machine units and loads in them'
     assert.equal(await w.getByRole('button', { name: 'mm', exact: true }).isDisabled(), true);
     assert.match(await w.locator('#gcode').innerText(), /^G20 G90 G17 G94$/m);
     assert.equal(await w.getByRole('spinbutton', { name: 'Stock width along X' }).inputValue(), '4');
-    // G21 typed into CNCjs's console: the widget follows within the poll
+    // G21 typed into CNCjs's console: the widget follows within the poll, and as this is not
+    // the port's first report it converts the stock (4 in) instead of taking the mm default
     units = 'G21';
     await w.getByText('G21, as set on COM7').waitFor();
-    assert.equal(await w.getByRole('spinbutton', { name: 'Stock width along X' }).inputValue(), '100');
+    assert.equal(await w.getByRole('spinbutton', { name: 'Stock width along X' }).inputValue(), '101.6');
     // G20 sent while the tab is hidden (no polls), then Load: Load sees it and regenerates the
-    // same part in inches, the untouched 100 mm stock included, rather than the inch defaults
+    // same part in inches
     const frame = ctx.pages()[0].frame({ name: 'w' });
     await frame.evaluate(() => Object.defineProperty(document, 'hidden', { get: () => true, configurable: true }));
     await new Promise(resolve => setTimeout(resolve, 1200));
@@ -280,7 +281,7 @@ test('embedded in CNCjs, the widget follows the machine units and loads in them'
     await w.getByRole('button', { name: 'Load in CNCjs' }).click();
     await w.getByText('Loaded square-setup1.nc into CNCjs on COM7 in inches: COM7 switched to G20.').waitFor();
     assert.equal(uploads.length, 1);
-    assert.match(uploads[0].body.gcode, /\n\(stock 3\.937 x 2\.3622 x 0\.7874, /);
+    assert.match(uploads[0].body.gcode, /\n\(stock 4 x 2\.5 x 0\.75, /);
     assert.match(uploads[0].body.gcode, /\nG20 G90 G17 G94\n/);
     assert.doesNotMatch(uploads[0].body.gcode, /G21/);
     assert.equal(await w.locator('#gcode').innerText().then(t => t + '\n'), uploads[0].body.gcode);

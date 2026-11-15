@@ -1284,8 +1284,10 @@ function adoptCncjsStyles() {
 // load.state: idle | loading | loaded | refused | failed. `program` is the text that was sent;
 // `editedTo` is the editor's text when the outcome arrived, if it had already changed.
 // `units` is the open port's units mode as CNCjs last reported it, null while unknown.
+// Each /api/controllers request for units is numbered when sent (`unitsAsked`); `unitsAnswered`
+// is the newest one acted on, so a slower, older reply never overrides a newer one.
 const NO_LOAD = { state: 'idle', message: '', program: '', editedTo: null };
-const cnc = { token, port: null, units: null, load: NO_LOAD };
+const cnc = { token, port: null, units: null, unitsAsked: 0, unitsAnswered: 0, load: NO_LOAD };
 const programName = () => `${st.op}${st.op === 'square' ? `-setup${st.sq.setup}` : st.op === 'side' ? `-${st.side.side}` : ''}.nc`;
 const programText = () => current.length ? current.join('\n') + '\n' : '';
 const setLoad = (state, message, program) => {
@@ -1338,22 +1340,31 @@ function followMachine(units, convert = 'typed') {
   render();
 }
 // CNCjs refreshes Grbl's parser state ($G) every half second while idle, so a second's poll
-// follows a G20 or G21 typed into the console. A failed poll keeps what was known.
+// follows a G20 or G21 typed into the console. A failed or unknown reply keeps what was known.
 async function pollMachineUnits() {
-  const port = cnc.port;
-  if (!port || document.hidden) return;
+  const port = cnc.port, seq = ++cnc.unitsAsked;
+  if (!port || document.hidden || cnc.load.state === 'loading') return;
   const controllers = await cncjsApi('/api/controllers', { signal: AbortSignal.timeout(5000) });
   const units = machineUnits(controllers, port);
+  if (port !== cnc.port || seq < cnc.unitsAnswered || !units || units === cnc.units) return;
   // a switch rebuilds the boxes: leave it for a later poll while one is being typed in
-  if (port !== cnc.port || units === cnc.units || document.activeElement?.matches('.fld input')) return;
-  followMachine(units);
+  if (document.hasFocus() && document.activeElement?.matches('.fld input')) return;
+  cnc.unitsAnswered = seq;
+  // The first report after a port opens sets the widget up in the machine's units, with their
+  // defaults; a later switch converts every value, so the part on screen keeps its size.
+  followMachine(units, cnc.units === null ? 'typed' : 'all');
 }
 async function watchMachineUnits() {
+  let failing = '';
   for (;;) {
     try {
       await pollMachineUnits();
+      if (failing) console.info('cncjs-conversational: following the machine units again.');
+      failing = '';
     } catch (error) {
-      console.debug(`cncjs-conversational: units poll failed: ${error.message}`);
+      // warn when following stops and when it resumes, not every second in between
+      if (!failing) console.warn(`cncjs-conversational: cannot read the machine units (${error.message}); keeping ${UNITS[st.units].code}.`);
+      failing = error.message;
     }
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
@@ -1361,7 +1372,7 @@ async function watchMachineUnits() {
 
 async function loadIntoCncjs() {
   // Snapshot what is being sent; the port and the editor may change while waiting.
-  const port = cnc.port, genUnits = st.units;
+  const port = cnc.port, genUnits = st.units, seq = ++cnc.unitsAsked;
   let name = programName(), program = programText(), switched = '';
   setLoad('loading', `Loading ${name}…`, program);
   try {
@@ -1374,10 +1385,12 @@ async function loadIntoCncjs() {
     if (workflow !== 'idle') return setLoad('refused', `Not loaded: a program is ${workflow} on ${port}. Stop it in CNCjs first.`, program);
     // The machine may have changed units since the program was generated: regenerate in its units.
     const units = machineUnits(controllers, port);
+    cnc.unitsAnswered = Math.max(cnc.unitsAnswered, seq);
     if (units && units !== genUnits) {
       const code = UNITS[units].code;
-      // a poll already switched the editor while this waited: what is shown is not what was clicked
-      if (st.units !== genUnits) return setLoad('refused', `Not loaded: ${port} switched to ${code} while loading. Check the program and load again.`, programText());
+      // the editor changed while this waited (a poll's switch or an edit): what would be
+      // regenerated is not what was clicked
+      if (st.units !== genUnits || programText() !== program) return setLoad('refused', `Not loaded: ${port} switched to ${code} while loading. Check the program and load again.`, programText());
       followMachine(units, 'all');
       name = programName();
       program = programText();
