@@ -310,7 +310,9 @@ const bad = (p, v) => { const { min, max } = limits(p); return !Number.isFinite(
 // boxes the user has typed in keep their value (converted) when the units change; the rest take that unit's default
 const edited = new Set();
 // each length and feed as last entered, in mm: conversions start from it rather than from the
-// rounded value on screen, so switching back and forth never drifts (5 mm stays 5, not 5.001)
+// rounded value on screen, so switching back and forth never drifts (5 mm stays 5, not 5.001).
+// The one exception is a value raised to a box's min on conversion: the part then uses the
+// raised value, so the mm copy follows it (0.1 mm -> 0.004 in -> 0.102 mm).
 const inMM = Object.fromEntries(Object.keys(F).filter(p => F[p].dim !== 'none').map(p => [p, pick(DEFAULTS.mm, p)]));
 // Every write of a box's value goes through here, so a length's mm copy never falls behind.
 // `mm` defaults to the value in the current units, converted.
