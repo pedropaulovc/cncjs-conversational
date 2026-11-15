@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-14
+
 - Programs in inches (G20) as well as millimetres (G21). With a port open in
   CNCjs, the widget follows the machine's units mode, polling CNCjs once a
   second; otherwise an mm/inch switch picks. The switch, like the session's
