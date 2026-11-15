@@ -331,6 +331,24 @@ test('embedded in CNCjs, Load refuses a units switch when the program changed wh
   }
 });
 
+test('embedded in CNCjs, Load fails when the port changes while it waits, whatever the old port is doing', async () => {
+  let hold = null, release;
+  const { ctx, w, uploads } = await embedInCncjs({ controllers: () => [{ port: 'COM7', workflow: { state: 'running' } }], gate: () => hold });
+  try {
+    await w.getByText('Port COM7: loading replaces the program loaded in CNCjs.').waitFor();
+    hold = new Promise(resolve => { release = resolve; });
+    await w.getByRole('button', { name: 'Load in CNCjs' }).click();
+    await w.getByText('Loading square-setup1.nc…').waitFor();
+    // CNCjs switches the widget to COM8 while COM7 keeps running its job
+    await ctx.pages()[0].evaluate(() => document.querySelector('iframe').contentWindow.postMessage({ token: 'tok123', action: { type: 'change', payload: { port: 'COM8', controller: 'Grbl' } } }, '*'));
+    release();
+    await w.getByText('Not loaded: COM7 is no longer the port selected in CNCjs.').waitFor();
+    assert.equal(uploads.length, 0);
+  } finally {
+    await ctx.close();
+  }
+});
+
 test('embedded in CNCjs, Load reports a closed port or a reply that is not from CNCjs', async () => {
   let controllers = [], gcode = {};
   const { ctx, w, uploads } = await embedInCncjs({ controllers: () => controllers, gcode: () => gcode });
