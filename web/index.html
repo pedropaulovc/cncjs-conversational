@@ -310,8 +310,16 @@ const bad = (p, v) => { const { min, max } = limits(p); return !Number.isFinite(
 // boxes the user has typed in keep their value (converted) when the units change; the rest take that unit's default
 const edited = new Set();
 // each length and feed as last entered, in mm: conversions start from it rather than from the
-// rounded value on screen, so switching back and forth never drifts (5 mm stays 5, not 5.001)
+// rounded value on screen, so switching back and forth never drifts (5 mm stays 5, not 5.001).
+// The one exception is a value raised to a box's min on conversion: the part then uses the
+// raised value, so the mm copy follows it (0.1 mm -> 0.004 in -> 0.102 mm).
 const inMM = Object.fromEntries(Object.keys(F).filter(p => F[p].dim !== 'none').map(p => [p, pick(DEFAULTS.mm, p)]));
+// Every write of a box's value goes through here, so a length's mm copy never falls behind.
+// `mm` defaults to the value in the current units, converted.
+const setValue = (p, v, mm = v / U().perMM) => {
+  set(p, v);
+  if (F[p].dim !== 'none') inMM[p] = mm;
+};
 // pressed state for toggle buttons: Bootstrap's look (.active) and its accessible state
 const press = (b, on) => { b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); };
 const n2 = v => +v.toFixed(2);
@@ -380,8 +388,7 @@ function buildInputs() {
       const v = parseFloat(inp.value);
       lab.dataset.state = bad(p, v) ? 'error' : '';
       if (bad(p, v)) return;
-      set(p, p === 'bolt.n' ? Math.max(1, Math.round(v)) : v);
-      if (F[p].dim !== 'none') inMM[p] = v / U().perMM;
+      setValue(p, p === 'bolt.n' ? Math.max(1, Math.round(v)) : v);
       edited.add(p);
       render();
     });
@@ -402,15 +409,22 @@ function setUnits(next, convert = 'typed') {
     if (f.dim === 'none') continue;
     if (convert === 'typed' && !edited.has(p)) inMM[p] = pick(DEFAULTS[next], p) / to.perMM;
     const min = f.min == null ? -Infinity : Math.ceil(f.min * to.perMM * 10 ** to.dp) / 10 ** to.dp;
-    set(p, Math.max(round(inMM[p] * to.perMM, to.dp), min));
+    const shown = round(inMM[p] * to.perMM, to.dp);
+    // a value raised to the min is what the part now uses, so its mm copy follows it
+    setValue(p, Math.max(shown, min), shown < min ? min / to.perMM : inMM[p]);
   }
   st.units = next;
   document.documentElement.dataset.units = next;
   fitPlan();
   buildInputs();
   render();
-  // the boxes were rebuilt (and placed by render): put the user back in the one they were typing in
-  if (typing && inputs[typing]) inputs[typing].querySelector('input').focus();
+  // The boxes were rebuilt (and placed by render): put the user back in the one they were typing
+  // in, its converted value selected so the next keystroke replaces it rather than extending it.
+  const back = typing && inputs[typing]?.querySelector('input');
+  if (back) {
+    back.focus();
+    back.select();
+  }
 }
 
 // ---------- svg helpers ----------
@@ -1389,11 +1403,11 @@ async function loadIntoCncjs() {
     // the same rule CNCjs's own Upload button follows.
     const controllers = await cncjsApi('/api/controllers');
     if (!Array.isArray(controllers)) return setLoad('failed', 'Not loaded: CNCjs did not report its controllers.', program);
+    // the port was closed or changed while this waited: its state, units and program no longer apply
+    if (port !== cnc.port) return setLoad('failed', `Not loaded: ${port} is no longer the port selected in CNCjs.`, program);
     const workflow = controllers.find(c => c?.port === port)?.workflow?.state;
     if (!workflow) return setLoad('failed', `Not loaded: ${port} is not open in CNCjs.`, program);
     if (workflow !== 'idle') return setLoad('refused', `Not loaded: a program is ${workflow} on ${port}. Stop it in CNCjs first.`, program);
-    // the port was closed or changed while this waited: its units and its program no longer apply
-    if (port !== cnc.port) return setLoad('failed', `Not loaded: ${port} is no longer the port selected in CNCjs.`, program);
     const units = machineUnits(controllers, port);
     cnc.unitsAnswered = Math.max(cnc.unitsAnswered, seq);
     if (units && units !== genUnits) {
