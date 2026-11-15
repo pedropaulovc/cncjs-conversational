@@ -271,14 +271,19 @@ test('embedded in CNCjs, the widget follows the machine units and loads in them'
     units = 'G21';
     await w.getByText('G21, as set on COM7').waitFor();
     assert.equal(await w.getByRole('spinbutton', { name: 'Stock width along X' }).inputValue(), '100');
-    // switched back to G20 just before Load: what is loaded is in inches either way
+    // G20 sent while the tab is hidden (no polls), then Load: Load sees it and regenerates the
+    // same part in inches, the untouched 100 mm stock included, rather than the inch defaults
+    const frame = ctx.pages()[0].frame({ name: 'w' });
+    await frame.evaluate(() => Object.defineProperty(document, 'hidden', { get: () => true, configurable: true }));
+    await new Promise(resolve => setTimeout(resolve, 1200));
     units = 'G20';
     await w.getByRole('button', { name: 'Load in CNCjs' }).click();
-    await w.getByText(/^Loaded square-setup1\.nc into CNCjs on COM7/).waitFor();
+    await w.getByText('Loaded square-setup1.nc into CNCjs on COM7 in inches: COM7 switched to G20.').waitFor();
     assert.equal(uploads.length, 1);
+    assert.match(uploads[0].body.gcode, /\n\(stock 3\.937 x 2\.3622 x 0\.7874, /);
     assert.match(uploads[0].body.gcode, /\nG20 G90 G17 G94\n/);
     assert.doesNotMatch(uploads[0].body.gcode, /G21/);
-    assert.match(await w.locator('#gcode').innerText(), /^G20 G90 G17 G94$/m);
+    assert.equal(await w.locator('#gcode').innerText().then(t => t + '\n'), uploads[0].body.gcode);
   } finally {
     await ctx.close();
   }

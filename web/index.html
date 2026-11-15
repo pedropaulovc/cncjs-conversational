@@ -367,10 +367,10 @@ function buildInputs() {
     const f = F[p];
     const lab = document.createElement('label');
     lab.className = 'fld';
-    const { min, max } = limits(p);
+    const { max } = f;
     const step = f.step ?? (f.dim === 'feed' ? U().feedStep : U().step);
     const u = f.dim === 'feed' ? U().feed : f.u;
-    lab.innerHTML = `${f.t ? `<span>${f.t}</span>` : ''}<input type="number" inputmode="decimal" aria-label="${f.a}" step="${step}" ${min != null ? `min="${min}"` : ''} ${max != null ? `max="${max}"` : ''}>${u ? `<span class="u">${u}</span>` : ''}`;
+    lab.innerHTML = `${f.t ? `<span>${f.t}</span>` : ''}<input type="number" inputmode="decimal" aria-label="${f.a}" step="${step}" ${max != null ? `max="${max}"` : ''}>${u ? `<span class="u">${u}</span>` : ''}`;
     const inp = lab.querySelector('input');
     inp.value = get(p);
     inp.addEventListener('input', () => {
@@ -388,13 +388,20 @@ function buildInputs() {
   }
 }
 
-// Lengths and feeds the user typed are converted; the others take the new unit's defaults.
-function setUnits(next) {
+// convert: 'typed' converts the lengths and feeds the user typed and gives the others the new
+// unit's defaults (a switch the user asks for); 'all' converts every one, so the part keeps its
+// size (a switch the user did not see, made while loading). Rounding never goes under a box's min.
+function setUnits(next, convert = 'typed') {
   if (next === st.units) return;
-  const k = UNITS[next].perMM / U().perMM;
+  const to = UNITS[next], k = to.perMM / U().perMM;
   for (const [p, f] of Object.entries(F)) {
     if (f.dim === 'none') continue;
-    set(p, edited.has(p) ? round(get(p) * k, UNITS[next].dp) : pick(DEFAULTS[next], p));
+    if (convert === 'typed' && !edited.has(p)) {
+      set(p, pick(DEFAULTS[next], p));
+      continue;
+    }
+    const min = f.min == null ? -Infinity : Math.ceil(f.min * to.perMM * 10 ** to.dp) / 10 ** to.dp;
+    set(p, Math.max(round(get(p) * k, to.dp), min));
   }
   st.units = next;
   document.documentElement.dataset.units = next;
@@ -1325,19 +1332,28 @@ function machineUnits(controllers, port) {
   const s = Array.isArray(controllers) ? controllers.find(c => c?.port === port)?.controller?.state : null;
   return MODAL_UNITS[s?.parserstate?.modal?.units ?? s?.modal?.units ?? s?.sr?.modal?.units] ?? null;
 }
-function followMachine(units) {
+function followMachine(units, convert = 'typed') {
   cnc.units = units;
-  if (units && units !== st.units) return setUnits(units);
+  if (units && units !== st.units) return setUnits(units, convert);
   render();
 }
 // CNCjs refreshes Grbl's parser state ($G) every half second while idle, so a second's poll
 // follows a G20 or G21 typed into the console. A failed poll keeps what was known.
+async function pollMachineUnits() {
+  const port = cnc.port;
+  if (!port || document.hidden) return;
+  const controllers = await cncjsApi('/api/controllers', { signal: AbortSignal.timeout(5000) });
+  const units = machineUnits(controllers, port);
+  // a switch rebuilds the boxes: leave it for a later poll while one is being typed in
+  if (port !== cnc.port || units === cnc.units || document.activeElement?.matches('.fld input')) return;
+  followMachine(units);
+}
 async function watchMachineUnits() {
   for (;;) {
-    const port = cnc.port;
-    if (port && !document.hidden) {
-      const units = await cncjsApi('/api/controllers').then(c => machineUnits(c, port), () => cnc.units);
-      if (port === cnc.port && units !== cnc.units) followMachine(units);
+    try {
+      await pollMachineUnits();
+    } catch (error) {
+      console.debug(`cncjs-conversational: units poll failed: ${error.message}`);
     }
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
@@ -1345,7 +1361,7 @@ async function watchMachineUnits() {
 
 async function loadIntoCncjs() {
   // Snapshot what is being sent; the port and the editor may change while waiting.
-  const port = cnc.port;
+  const port = cnc.port, genUnits = st.units;
   let name = programName(), program = programText(), switched = '';
   setLoad('loading', `Loading ${name}…`, program);
   try {
@@ -1358,12 +1374,15 @@ async function loadIntoCncjs() {
     if (workflow !== 'idle') return setLoad('refused', `Not loaded: a program is ${workflow} on ${port}. Stop it in CNCjs first.`, program);
     // The machine may have changed units since the program was generated: regenerate in its units.
     const units = machineUnits(controllers, port);
-    if (units && units !== st.units) {
-      followMachine(units);
+    if (units && units !== genUnits) {
+      const code = UNITS[units].code;
+      // a poll already switched the editor while this waited: what is shown is not what was clicked
+      if (st.units !== genUnits) return setLoad('refused', `Not loaded: ${port} switched to ${code} while loading. Check the program and load again.`, programText());
+      followMachine(units, 'all');
       name = programName();
       program = programText();
-      switched = ` in ${UNITS[units].name}: ${port} switched to ${UNITS[units].code}`;
-      if (!program) return setLoad('failed', `Not loaded: ${port} switched to ${UNITS[units].code} and the program in ${UNITS[units].name} has errors.`, program);
+      switched = ` in ${UNITS[units].name}: ${port} switched to ${code}`;
+      if (!program) return setLoad('failed', `Not loaded: ${port} switched to ${code} and the program in ${UNITS[units].name} has errors.`, program);
     }
     if (units && cnc.units !== units) followMachine(units);
     await cncjsApi('/api/gcode', { method: 'POST', body: JSON.stringify({ port, name, gcode: program }) });
