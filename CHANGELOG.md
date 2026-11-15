@@ -4,8 +4,8 @@
 
 - Programs in inches (G20) as well as millimetres (G21). With a port open in
   CNCjs, the widget follows the machine's units mode, polling CNCjs once a
-  second; otherwise an mm/inch switch picks. The switch, like the first units
-  report from a machine, converts typed values and gives the rest
+  second; otherwise an mm/inch switch picks. The switch, like the session's
+  first units report, converts typed values and gives the rest
   that unit's defaults; later machine switches convert every value so the part
   keeps its size. Load regenerates the program if the machine changed units
   since it was generated. Retracts, overruns and check limits use round values

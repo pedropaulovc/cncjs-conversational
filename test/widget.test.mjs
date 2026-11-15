@@ -284,6 +284,8 @@ test('embedded in CNCjs, later machine switches keep the part\'s size, Load incl
     units = 'G21';
     await w.getByText('G21, as set on COM7').waitFor();
     assert.equal(await width.inputValue(), '100');
+    // converted from the value as entered, not the rounded 0.1969 in: no drift to 5.001
+    assert.equal(await w.getByRole('spinbutton', { name: 'Clearance height above Z0' }).inputValue(), '5');
     // G20 sent while the tab is hidden (no polls), then Load: Load sees it and regenerates the
     // same part in inches
     const frame = ctx.pages()[0].frame({ name: 'w' });
@@ -315,8 +317,11 @@ test('embedded in CNCjs, Load refuses a units switch when the program changed wh
     release();
     await w.getByText('Not loaded: COM7 is in G20 and the program changed while loading. It is now shown in inches; check it and load again.').waitFor();
     assert.equal(uploads.length, 0);
-    // the edit is kept, converted, and what is shown is what the next Load sends
-    assert.equal(await w.getByRole('spinbutton', { name: 'Finished width' }).inputValue(), '3.1496');
+    // the edit is kept, converted, and what is shown is what the next Load sends; the user is
+    // still in the box they were typing in
+    const finished = w.getByRole('spinbutton', { name: 'Finished width' });
+    assert.equal(await finished.inputValue(), '3.1496');
+    assert.equal(await finished.evaluate(el => el === document.activeElement), true);
     assert.match(await w.locator('#gcode').innerText(), /^G20 G90 G17 G94$/m);
   } finally {
     await ctx.close();

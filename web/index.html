@@ -309,6 +309,9 @@ const limits = p => { const f = F[p]; return { min: f.min == null ? null : f.dim
 const bad = (p, v) => { const { min, max } = limits(p); return !Number.isFinite(v) || (min != null && v < min) || (max != null && v > max); };
 // boxes the user has typed in keep their value (converted) when the units change; the rest take that unit's default
 const edited = new Set();
+// each length and feed as last entered, in mm: conversions start from it rather than from the
+// rounded value on screen, so switching back and forth never drifts (5 mm stays 5, not 5.001)
+const inMM = Object.fromEntries(Object.keys(F).filter(p => F[p].dim !== 'none').map(p => [p, pick(DEFAULTS.mm, p)]));
 // pressed state for toggle buttons: Bootstrap's look (.active) and its accessible state
 const press = (b, on) => { b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); };
 const n2 = v => +v.toFixed(2);
@@ -378,6 +381,7 @@ function buildInputs() {
       lab.dataset.state = bad(p, v) ? 'error' : '';
       if (bad(p, v)) return;
       set(p, p === 'bolt.n' ? Math.max(1, Math.round(v)) : v);
+      if (F[p].dim !== 'none') inMM[p] = v / U().perMM;
       edited.add(p);
       render();
     });
@@ -389,25 +393,24 @@ function buildInputs() {
 }
 
 // convert: 'typed' converts the lengths and feeds the user typed and gives the others the new
-// unit's defaults (a switch the user asks for); 'all' converts every one, so the part keeps its
-// size (a switch the user did not see, made while loading). Rounding never goes under a box's min.
+// unit's defaults (the switch button, and the machine's first report); 'all' converts every one,
+// so the part keeps its size (later machine switches). Rounding never goes under a box's min.
 function setUnits(next, convert = 'typed') {
   if (next === st.units) return;
-  const to = UNITS[next], k = to.perMM / U().perMM;
+  const to = UNITS[next], typing = active;
   for (const [p, f] of Object.entries(F)) {
     if (f.dim === 'none') continue;
-    if (convert === 'typed' && !edited.has(p)) {
-      set(p, pick(DEFAULTS[next], p));
-      continue;
-    }
+    if (convert === 'typed' && !edited.has(p)) inMM[p] = pick(DEFAULTS[next], p) / to.perMM;
     const min = f.min == null ? -Infinity : Math.ceil(f.min * to.perMM * 10 ** to.dp) / 10 ** to.dp;
-    set(p, Math.max(round(get(p) * k, to.dp), min));
+    set(p, Math.max(round(inMM[p] * to.perMM, to.dp), min));
   }
   st.units = next;
   document.documentElement.dataset.units = next;
   fitPlan();
   buildInputs();
   render();
+  // the boxes were rebuilt (and placed by render): put the user back in the one they were typing in
+  if (typing && inputs[typing]) inputs[typing].querySelector('input').focus();
 }
 
 // ---------- svg helpers ----------
@@ -1337,11 +1340,11 @@ function machineUnits(controllers, port) {
 }
 // The first units report of the session sets the widget up in the machine's units, with their
 // defaults; every later switch (a reopened port included) converts every value, so the part on
-// screen keeps its size.
+// screen keeps its size. `units` is 'mm' or 'in', never unknown.
 function followMachine(units, convert = cnc.followed === 'never' ? 'typed' : 'all') {
   cnc.units = units;
-  if (units) cnc.followed = 'yes';
-  if (units && units !== st.units) return setUnits(units, convert);
+  cnc.followed = 'yes';
+  if (units !== st.units) return setUnits(units, convert);
   render();
 }
 // CNCjs refreshes Grbl's parser state ($G) every half second while idle, so a second's poll
@@ -1389,18 +1392,17 @@ async function loadIntoCncjs() {
     const workflow = controllers.find(c => c?.port === port)?.workflow?.state;
     if (!workflow) return setLoad('failed', `Not loaded: ${port} is not open in CNCjs.`, program);
     if (workflow !== 'idle') return setLoad('refused', `Not loaded: a program is ${workflow} on ${port}. Stop it in CNCjs first.`, program);
-    // The machine may have changed units since the program was generated: regenerate in its units.
+    // the port was closed or changed while this waited: its units and its program no longer apply
+    if (port !== cnc.port) return setLoad('failed', `Not loaded: ${port} is no longer the port selected in CNCjs.`, program);
     const units = machineUnits(controllers, port);
     cnc.unitsAnswered = Math.max(cnc.unitsAnswered, seq);
     if (units && units !== genUnits) {
-      const code = UNITS[units].code;
-      // The editor changed while this waited (a poll's switch or an edit), so what would be
-      // regenerated is not what was clicked. Show it in the machine's units and let the user check it.
-      if (st.units !== genUnits || programText() !== program) {
-        followMachine(units, 'all');
-        return setLoad('refused', `Not loaded: ${port} is in ${code} and the program changed while loading. It is now shown in ${UNITS[units].name}; check it and load again.`, programText());
-      }
+      // The machine changed units since the program was generated: regenerate the same part in
+      // its units. If the editor changed while this waited (a poll's switch or an edit), what was
+      // regenerated is not what was clicked: show it and let the user check it instead.
+      const code = UNITS[units].code, changed = st.units !== genUnits || programText() !== program;
       followMachine(units, 'all');
+      if (changed) return setLoad('refused', `Not loaded: ${port} is in ${code} and the program changed while loading. It is now shown in ${UNITS[units].name}; check it and load again.`, programText());
       name = programName();
       program = programText();
       switched = ` in ${UNITS[units].name}: ${port} switched to ${code}`;
