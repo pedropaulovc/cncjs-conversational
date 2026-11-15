@@ -322,6 +322,9 @@ test('embedded in CNCjs, Load refuses a units switch when the program changed wh
     const finished = w.getByRole('spinbutton', { name: 'Finished width' });
     assert.equal(await finished.inputValue(), '3.1496');
     assert.equal(await finished.evaluate(el => el === document.activeElement), true);
+    // its converted value is selected: the next keystroke replaces it instead of extending it
+    await finished.press('3');
+    assert.equal(await finished.inputValue(), '3');
     assert.match(await w.locator('#gcode').innerText(), /^G20 G90 G17 G94$/m);
   } finally {
     await ctx.close();
