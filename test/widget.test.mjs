@@ -52,6 +52,32 @@ test('side face refuses a cut deeper than the stock', async () => {
   assert.equal(await page.locator('#dl').isDisabled(), true);
 });
 
+test('switching units converts typed values, takes the other defaults, and writes G20 or G21', async () => {
+  const p = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
+  try {
+    await p.goto(page_url);
+    await p.getByRole('button', { name: 'Face', exact: true }).click();
+    await p.getByRole('spinbutton', { name: 'Stock width along X' }).fill('120');
+    await p.getByRole('button', { name: 'inch', exact: true }).click();
+    assert.equal(await p.getByRole('spinbutton', { name: 'Stock width along X' }).inputValue(), '4.7244');
+    assert.equal(await p.getByRole('spinbutton', { name: 'Stock height along Y' }).inputValue(), '2.5');
+    assert.match(await p.locator('#v-tool').innerText(), /in\/min/);
+    let code = await p.locator('#gcode').innerText();
+    assert.match(code, /^G20 G90 G17 G94$/m);
+    assert.doesNotMatch(code, /G21/);
+    // passes overrun the 4.7244 in stock by the tool radius and 0.08 in, not 2 (mm)
+    const xs = code.split('\n').flatMap(l => words(l, 'X'));
+    assert.ok(Math.max(...xs) < 4.7244 + 0.125 + 0.08 + 1e-4, `X${Math.max(...xs)} overruns as if in mm`);
+    await p.getByRole('button', { name: 'mm', exact: true }).click();
+    assert.equal(await p.getByRole('spinbutton', { name: 'Stock width along X' }).inputValue(), '120');
+    assert.equal(await p.getByRole('spinbutton', { name: 'Stock height along Y' }).inputValue(), '60');
+    code = await p.locator('#gcode').innerText();
+    assert.match(code, /^G21 G90 G17 G94$/m);
+  } finally {
+    await p.close();
+  }
+});
+
 // As the sidebar column shows it: no dimension box may cover another or hang outside its
 // sketch, none may stray far from the dimension it sets, and nothing may scroll sideways.
 // Each case starts from a fresh page; besides every operation's defaults it covers thin stock
@@ -226,6 +252,77 @@ test('embedded in CNCjs, Load refuses while a program is running or paused', asy
     await w.getByRole('button', { name: 'Load in CNCjs' }).click();
     await w.getByText('Not loaded: a program is paused on COM7. Stop it in CNCjs first.').waitFor();
     assert.equal(uploads.length, 0);
+  } finally {
+    await ctx.close();
+  }
+});
+
+const grbl = units => [{ port: 'COM7', workflow: { state: 'idle' }, controller: { type: 'Grbl', state: { parserstate: { modal: { units } } } } }];
+
+test('embedded in CNCjs, the first units report sets the widget up with that unit\'s defaults', async () => {
+  const { ctx, w } = await embedInCncjs({ controllers: () => grbl('G20') });
+  try {
+    await w.getByText('G20, as set on COM7').waitFor();
+    assert.equal(await w.getByRole('button', { name: 'mm', exact: true }).isDisabled(), true);
+    assert.match(await w.locator('#gcode').innerText(), /^G20 G90 G17 G94$/m);
+    assert.equal(await w.getByRole('spinbutton', { name: 'Stock width along X' }).inputValue(), '4');
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('embedded in CNCjs, later machine switches keep the part\'s size, Load included', async () => {
+  let units = 'G21';
+  const { ctx, w, uploads } = await embedInCncjs({ controllers: () => grbl(units) });
+  const width = w.getByRole('spinbutton', { name: 'Stock width along X' });
+  try {
+    await w.getByText('G21, as set on COM7').waitFor();
+    // G20 typed into CNCjs's console: converted (3.937 in), not the inch default (4 in)
+    units = 'G20';
+    await w.getByText('G20, as set on COM7').waitFor();
+    assert.equal(await width.inputValue(), '3.937');
+    units = 'G21';
+    await w.getByText('G21, as set on COM7').waitFor();
+    assert.equal(await width.inputValue(), '100');
+    // converted from the value as entered, not the rounded 0.1969 in: no drift to 5.001
+    assert.equal(await w.getByRole('spinbutton', { name: 'Clearance height above Z0' }).inputValue(), '5');
+    // G20 sent while the tab is hidden (no polls), then Load: Load sees it and regenerates the
+    // same part in inches
+    const frame = ctx.pages()[0].frame({ name: 'w' });
+    await frame.evaluate(() => Object.defineProperty(document, 'hidden', { get: () => true, configurable: true }));
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    units = 'G20';
+    await w.getByRole('button', { name: 'Load in CNCjs' }).click();
+    await w.getByText('Loaded square-setup1.nc into CNCjs on COM7 in inches: COM7 switched to G20.').waitFor();
+    assert.equal(uploads.length, 1);
+    assert.match(uploads[0].body.gcode, /\n\(stock 3\.937 x 2\.3622 x 0\.7874, /);
+    assert.match(uploads[0].body.gcode, /\nG20 G90 G17 G94\n/);
+    assert.doesNotMatch(uploads[0].body.gcode, /G21/);
+    assert.equal(await w.locator('#gcode').innerText().then(t => t + '\n'), uploads[0].body.gcode);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('embedded in CNCjs, Load refuses a units switch when the program changed while it waited', async () => {
+  let units = 'G21', hold = null, release;
+  const { ctx, w, uploads } = await embedInCncjs({ controllers: () => grbl(units), gate: () => hold });
+  try {
+    await w.getByText('G21, as set on COM7').waitFor();
+    hold = new Promise(resolve => { release = resolve; });
+    await w.getByRole('button', { name: 'Load in CNCjs' }).click();
+    await w.getByText('Loading square-setup1.nc…').waitFor();
+    await w.getByRole('spinbutton', { name: 'Finished width' }).fill('80');
+    units = 'G20';
+    release();
+    await w.getByText('Not loaded: COM7 is in G20 and the program changed while loading. It is now shown in inches; check it and load again.').waitFor();
+    assert.equal(uploads.length, 0);
+    // the edit is kept, converted, and what is shown is what the next Load sends; the user is
+    // still in the box they were typing in
+    const finished = w.getByRole('spinbutton', { name: 'Finished width' });
+    assert.equal(await finished.inputValue(), '3.1496');
+    assert.equal(await finished.evaluate(el => el === document.activeElement), true);
+    assert.match(await w.locator('#gcode').innerText(), /^G20 G90 G17 G94$/m);
   } finally {
     await ctx.close();
   }

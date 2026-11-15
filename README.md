@@ -6,8 +6,20 @@ the dimension lines they control, and the drawing redraws to scale as you type.
 The toolpath and the G-code come from the same calculation.
 
 Operations: square up stock (two setups), face, side face, rectangular pocket,
-circular pocket and bolt circle. Output is metric Grbl G-code (G21, G54); peck
-drilling is expanded because Grbl has no canned cycles.
+circular pocket and bolt circle. Output is Grbl G-code in G54; peck drilling is
+expanded because Grbl has no canned cycles.
+
+The widget works in millimetres (G21) or inches (G20). With a port open in
+CNCjs it follows the machine's units mode as CNCjs reports it, switching when a
+G20 or G21 is sent from the console; otherwise the **mm**/**inch** switch picks.
+The **mm**/**inch** switch converts the values you typed and gives the rest that
+unit's defaults; so does the first units report of the session, unless Load is
+the first to see it. Every later switch on the machine, a reopened port or
+another machine included, converts every value, so the part keeps its size. If the
+machine changed units after the program was generated, **Load in CNCjs**
+regenerates it in the machine's units before sending it, or refuses if the
+program changed while it was checking. The program sets its units on its first
+line and leaves the machine in them.
 
 ## Use with CNCjs
 
